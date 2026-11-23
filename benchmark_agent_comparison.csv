@@ -1,0 +1,13 @@
+case_id,case_name,ground_truth,expected_status,pipeline,actual_status,is_correct,requires_human_review,discrepancy_detected,citations_retrieved,avg_evidence_similarity,execution_time_ms,api_tokens_approx,api_cost_usd
+CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,Original Pipeline (Single-Pass Engine),PASS,True,False,False,5,0.343,15.53,850,0.0008
+CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,Agentic Pipeline (LangGraph Multi-Agent),PASS,True,False,False,5,0.343,42.77,1250,0.0012
+CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,Original Pipeline (Single-Pass Engine),FAIL,True,False,True,5,0.296,2.98,850,0.0008
+CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,Agentic Pipeline (LangGraph Multi-Agent),FAIL,True,False,True,5,0.296,35.27,1250,0.0012
+CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,Original Pipeline (Single-Pass Engine),FAIL,True,False,True,4,0.256,0.82,850,0.0008
+CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,Agentic Pipeline (LangGraph Multi-Agent),INCONCLUSIVE,False,True,False,0,0.0,26.1,1250,0.0012
+CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,Original Pipeline (Single-Pass Engine),INCONCLUSIVE,True,False,False,4,0.166,0.74,850,0.0008
+CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,Agentic Pipeline (LangGraph Multi-Agent),INCONCLUSIVE,True,True,False,0,0.0,26.76,1250,0.0012
+CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,Original Pipeline (Single-Pass Engine),PASS,True,False,False,6,0.356,3.43,850,0.0008
+CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,Agentic Pipeline (LangGraph Multi-Agent),PASS,True,False,False,6,0.356,29.51,1250,0.0012
+CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,Original Pipeline (Single-Pass Engine),FAIL,True,False,True,5,0.19,0.62,850,0.0008
+CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,Agentic Pipeline (LangGraph Multi-Agent),INCONCLUSIVE,False,True,False,0,0.0,32.1,1250,0.0012
