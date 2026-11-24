@@ -390,3 +390,9 @@ is guaranteed across both architectures.
    Every citation contains the exact source filename, page number, chunk identifier, and similarity score. Passages are retrieved exclusively from indexed documents; citations are never fabricated.
 4. **Physical NISQ Feasibility Disclaimer**:
    Passing an ideal statevector simulation does **not** certify physical experiment execution. All reports include mandatory disclaimers regarding $T_1/T_2^*$ decoherence, two-qubit gate fidelities, crosstalk, and pulse calibration overhead on real hardware.
+
+## Contributors
+
+- Dhyeykumar Patel
+- Prachi Jagdale
+- Balaji Mali
