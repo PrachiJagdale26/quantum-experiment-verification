@@ -22,7 +22,7 @@ from ..schemas.verification import (
     ClaimVerificationPair,
 )
 from ..circuit.simulator import QuantumSimulator, SimulationError
-from ..circuit.metrics import compute_fidelity
+from ..circuit.metrics import compute_fidelity, distribution_fidelity
 from ..knowledge_base.retriever import QuantumRetriever
 from ..llm.analyzer import ScientificAnalyzer
 from ..llm.client import ConfigurableLLMClient
@@ -103,6 +103,13 @@ class VerificationEngine:
         checks.append(dist_chk)
         outcome_comparisons = comparisons
         tvd_score = tvd
+        if comparisons and simulation_output is not None:
+            # Compare against the full simulated distribution, so probability the
+            # proposal fails to mention counts against it.
+            fidelity_score = distribution_fidelity(
+                {c.basis_state: c.expected_probability for c in comparisons},
+                simulation_output.probabilities or {},
+            )
 
         # -------------------------------------------------------------
         # 5. Literature Retrieval & Grounding Check

@@ -9,3 +9,51 @@ enableXsrfProtection = false
 
 [client]
 toolbarMode = "minimal"
+
+# Visual identity: "cyanotype print". Status colors are reserved for verdicts.
+#   Cyanotype paper #E9EFF4 (page)   Prussian blue #132E52 (sidebar)   #183A66 (verdict print)
+#   Indigo ink #1D2240 (text)   Cyanotype #1F4E8C (actions)
+#   Verdigris #2E7D6B / text #24685A (pass)   Oxide red #B3362C (fail)
+#   Sodium #C98A12 / text #8A5A00 (inconclusive)
+[theme]
+base = "light"
+primaryColor = "#1F4E8C"
+backgroundColor = "#E9EFF4"
+secondaryBackgroundColor = "#DAE4EC"
+textColor = "#1D2240"
+linkColor = "#1F4E8C"
+borderColor = "#C3D0DB"
+dataframeBorderColor = "#C3D0DB"
+dataframeHeaderBackgroundColor = "#DAE4EC"
+greenColor = "#2E7D6B"
+greenTextColor = "#24685A"
+greenBackgroundColor = "#D6EAE3"
+redColor = "#B3362C"
+redTextColor = "#B3362C"
+redBackgroundColor = "#F3DEDB"
+orangeColor = "#C98A12"
+orangeTextColor = "#8A5A00"
+orangeBackgroundColor = "#F4E8CF"
+yellowColor = "#C98A12"
+yellowTextColor = "#8A5A00"
+yellowBackgroundColor = "#F4E8CF"
+blueColor = "#1F4E8C"
+blueTextColor = "#1F4E8C"
+blueBackgroundColor = "#D7E3F1"
+font = "Instrument Sans:https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap, sans-serif"
+headingFont = "STIX Two Text:https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap, serif"
+headingFontWeights = [600, 600, 600, 600, 400, 400]
+baseRadius = "4px"
+buttonRadius = "4px"
+showWidgetBorder = true
+chartCategoricalColors = ["#1D2240", "#1F4E8C", "#2E7D6B", "#C98A12", "#B3362C", "#7A8AA6"]
+
+# The sidebar is the dark frame of the print.
+[theme.sidebar]
+backgroundColor = "#132E52"
+secondaryBackgroundColor = "#1E3F69"
+textColor = "#E8EEF5"
+primaryColor = "#9CC3F0"
+linkColor = "#9CC3F0"
+borderColor = "#2E537F"
+codeBackgroundColor = "#1E3F69"

@@ -32,7 +32,7 @@ from ..document_processing.document_extractor import DocumentExtractor
 from ..knowledge_base.vector_store import QuantumKnowledgeBase
 from ..knowledge_base.retriever import QuantumRetriever
 from ..circuit.simulator import QuantumSimulator, SimulationError
-from ..circuit.metrics import compare_outcomes, total_variation_distance, compute_fidelity
+from ..circuit.metrics import compare_outcomes, total_variation_distance, compute_fidelity, distribution_fidelity
 from ..verification.rules import (
     check_qubit_count,
     check_circuit_syntax,
@@ -225,7 +225,7 @@ def simulate_circuit_tool(
         outcome_comparisons = comparisons
         exp_dict = {o.basis_state.strip(): o.expected_probability for o in expected_outcomes}
         tvd = total_variation_distance(exp_dict, sim_output.probabilities or {})
-        fidelity = max(0.0, 1.0 - tvd)
+        fidelity = distribution_fidelity(exp_dict, sim_output.probabilities or {})
 
     duration = time.time() - start_time
     return {
