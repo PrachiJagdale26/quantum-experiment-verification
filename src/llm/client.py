@@ -111,7 +111,7 @@ class ConfigurableLLMClient:
 
     def _init_vertex(self) -> Tuple[str, Optional[str], str]:
         """Helper to initialize Vertex AI attributes."""
-        cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", r"C:\GoogleCloudCredentials\vertex-service-account.json").strip()
+        cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
         project_id = os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
         location = os.getenv("VERTEX_LOCATION") or os.getenv("GOOGLE_CLOUD_LOCATION", "global").strip()
         vertex_model = os.getenv("VERTEX_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()

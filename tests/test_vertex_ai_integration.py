@@ -27,13 +27,24 @@ from src.knowledge_base.vector_store import QuantumKnowledgeBase
 from src.knowledge_base.retriever import QuantumRetriever
 
 
-SERVICE_ACCOUNT_PATH = r"C:\GoogleCloudCredentials\vertex-service-account.json"
+SERVICE_ACCOUNT_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+EXPECTED_PROJECT_ID = os.getenv("VERTEX_PROJECT_ID", "")
+EXPECTED_MODEL = os.getenv("VERTEX_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+# Tests that need a real Vertex AI service account. They are skipped (not failed) when
+# credentials are absent, e.g. in CI. Run them locally with: pytest -m live
+requires_vertex_credentials = pytest.mark.skipif(
+    not (SERVICE_ACCOUNT_PATH and os.path.exists(SERVICE_ACCOUNT_PATH)),
+    reason="Vertex AI service-account credentials not configured (GOOGLE_APPLICATION_CREDENTIALS).",
+)
 TEST_PDF_PATH = os.path.join("data", "sample_proposals", "s42256-025-01153-0.pdf")
 
 
 # -----------------------------------------------------------------------------
 # 1. Credentials, Configuration & Security Tests
 # -----------------------------------------------------------------------------
+@pytest.mark.live
+@requires_vertex_credentials
 def test_vertex_ai_credentials_and_adc_detection():
     """Verify service-account JSON is detected, parsed safely, and configured for ADC."""
     assert os.path.exists(SERVICE_ACCOUNT_PATH), f"Credential file missing at {SERVICE_ACCOUNT_PATH}"
@@ -43,20 +54,23 @@ def test_vertex_ai_credentials_and_adc_detection():
     
     # Must contain essential Google Service Account fields
     assert data.get("type") == "service_account"
-    assert data.get("project_id") == "acquired-winter-511114-c2"
-    assert "api-extraction@acquired-winter-511114-c2.iam.gserviceaccount.com" in data.get("client_email", "")
+    if EXPECTED_PROJECT_ID:
+        assert data.get("project_id") == EXPECTED_PROJECT_ID
+    assert data.get("client_email", "").endswith(".iam.gserviceaccount.com")
     assert "private_key" in data
 
     # Client must initialize with Vertex AI provider
     client = ConfigurableLLMClient(demo_mode=False)
     assert client.provider_name == "vertex"
-    assert client.model_name == "gemini-3.8-flash"
-    assert client.vertex_project == "acquired-winter-511114-c2"
+    assert client.model_name == EXPECTED_MODEL
+    assert client.vertex_project == (EXPECTED_PROJECT_ID or data.get("project_id"))
     assert client.vertex_location == "global"
-    assert client.service_account_email == "api-extraction@acquired-winter-511114-c2.iam.gserviceaccount.com"
+    assert client.service_account_email == data.get("client_email")
     assert os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") == SERVICE_ACCOUNT_PATH
 
 
+@pytest.mark.live
+@requires_vertex_credentials
 def test_vertex_ai_security_never_exposes_private_keys():
     """Verify that is_configured, status strings, and connectivity outputs NEVER leak private keys or tokens."""
     client = ConfigurableLLMClient(demo_mode=False)
@@ -73,6 +87,8 @@ def test_vertex_ai_security_never_exposes_private_keys():
     assert "BEGIN RSA PRIVATE KEY" not in diag_str
 
 
+@pytest.mark.live
+@requires_vertex_credentials
 def test_vertex_ai_connectivity_probe_graceful_diagnostics():
     """Verify connectivity probe returns structured diagnostic dictionary and handles sandbox/billing/quota gracefully."""
     client = ConfigurableLLMClient(demo_mode=False)
@@ -80,8 +96,9 @@ def test_vertex_ai_connectivity_probe_graceful_diagnostics():
     
     assert isinstance(diag, dict)
     assert diag["provider"] == "Google Cloud Vertex AI"
-    assert diag["model"] == "gemini-3.8-flash"
-    assert diag["project_id"] == "acquired-winter-511114-c2"
+    assert diag["model"] == EXPECTED_MODEL
+    if EXPECTED_PROJECT_ID:
+        assert diag["project_id"] == EXPECTED_PROJECT_ID
     assert diag["location"] == "global"
     assert "service_account" in diag
     assert "latency_ms" in diag
@@ -183,9 +200,13 @@ def test_structured_vertex_extraction_pydantic_validation():
     })
 
     client = ConfigurableLLMClient(demo_mode=False)
-    with patch.object(client, "_call_vertex", return_value=mock_vertex_json):
+    # Hermetic: route through the Vertex code path without real credentials.
+    client._provider = "vertex"
+    with patch.object(client, "is_configured", return_value=(True, "mocked vertex")), \
+         patch.object(client, "_call_vertex", return_value=mock_vertex_json) as mock_call:
         extractor = ProposalExtractor(client)
         spec = extractor.extract("Mock proposal text for Vertex AI test.")
+        assert mock_call.called, "Vertex call path was not exercised"
 
         assert spec.title == "Quantum Algorithmic Architectures on Superconducting Processors"
         assert spec.num_qubits == 2
