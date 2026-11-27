@@ -446,7 +446,7 @@ def build_corpus_gap_view(gap, assessment: Optional[Dict[str, Any]], scores: Dic
 # ----------------------------------------------------------------------------------
 # Research proposals: edit and approval (Phase 5)
 # ----------------------------------------------------------------------------------
-def build_proposal_view(plan: Dict[str, Any], gap_title: str = "") -> Dict[str, Any]:
+def build_proposal_view(plan: Dict[str, Any], gap_title: str = "", runs: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     from src.experiment_planning import FEASIBILITY_LABELS, PARAM_SOURCE_LABELS, SECTIONS
     from src.experiment_planning.schema import REQUIRED
     p = plan["proposal"]
@@ -472,8 +472,26 @@ def build_proposal_view(plan: Dict[str, Any], gap_title: str = "") -> Dict[str, 
         "circuit": None if c is None else {
             "num_qubits": c.num_qubits, "gates": [{"name": g.name, "target_qubits": g.target_qubits, "params": g.params}
                                                   for g in c.gates],
-            "expected_outcomes": [{"basis_state": o.basis_state, "expected_probability": o.expected_probability}
-                                  for o in c.expected_outcomes], "prediction_basis": c.prediction_basis},
+            "expected_outcomes": [{"basis_state": o.basis_state, "expected_probability": o.expected_probability,
+                                   "tolerance": o.tolerance}
+                                  for o in c.expected_outcomes], "prediction_basis": c.prediction_basis,
+            **({"expected_state": c.expected_state} if c.expected_state else {}),
+            **({"expected_outcomes_noisy": [{"basis_state": o.basis_state, "expected_probability": o.expected_probability}
+                                            for o in c.expected_outcomes_noisy]} if c.expected_outcomes_noisy else {})},
         "missing": p.missing_information, "warnings": p.warnings, "empty_required": empty_required,
         "history": plan["history"], "approvals": plan["approvals"],
+        "can_verify": plan["status"] == "approved",
+        "verification": _run_view(runs[0], plan["revision"]) if runs else None,
+        "runs": [{"run_id": r["run_id"], "revision": r["revision"], "verdict": r["verdict"], "at": r["at"]} for r in runs or []],
     }
+
+
+def _run_view(run: Dict[str, Any], current_revision: int) -> Dict[str, Any]:
+    """A stored verification run in the shape the verdict visuals expect, plus noise results."""
+    when = f"Verified {(run['at'] or '')[:16].replace('T', ' ')} UTC"
+    v = build_view(f"RUN-{run['run_id']}", run["spec"], run["report"], f"Approved revision {run['revision']}", None, when)
+    v["head"] = v["head"].replace("every claimed outcome", "every predicted outcome").replace("Claimed ", "Predicted ")
+    fid = next((c.metadata.get("fidelity") for c in run["report"].checks if c.check_id == "CHK-FID-01" and c.metadata), None)
+    v.update(run_id=run["run_id"], revision=run["revision"], stale=run["revision"] != current_revision,
+             simulator=run["simulator"], noise=run["noise"], state_fidelity=fid, feasibility=run.get("feasibility"))
+    return v

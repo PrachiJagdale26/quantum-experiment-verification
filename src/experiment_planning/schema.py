@@ -7,7 +7,7 @@ are checked against the stored text. Anything the system cannot ground is listed
 instead of being invented. The system never approves a proposal; only the researcher does.
 """
 
-from typing import List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -52,6 +52,10 @@ class CircuitDraft(BaseModel):
     gates: List[GateOperation]
     expected_outcomes: List[ExpectedOutcome] = Field(default_factory=list)
     prediction_basis: str = Field("", description="Why these outcomes are expected (theory), never the simulator's output.")
+    expected_state: Optional[Dict[str, List[float]]] = Field(
+        None, description="Optional target pure state {bitstring: [re, im]} for the state-fidelity check.")
+    expected_outcomes_noisy: List[ExpectedOutcome] = Field(
+        default_factory=list, description="Optional predictions under the plan's stated noise (checked against noisy simulation).")
 
     @model_validator(mode="after")
     def _qubits_in_register(self) -> "CircuitDraft":
@@ -59,7 +63,8 @@ class CircuitDraft(BaseModel):
             bad = [q for q in g.target_qubits if q >= self.num_qubits]
             if bad:
                 raise ValueError(f"gate {i} ({g.name}) uses qubit {bad[0]}, outside the {self.num_qubits}-qubit register")
-        for o in self.expected_outcomes:
+        state_keys = [ExpectedOutcome(basis_state=b, expected_probability=0) for b in (self.expected_state or {})]
+        for o in list(self.expected_outcomes) + list(self.expected_outcomes_noisy) + state_keys:
             if len(o.basis_state) != self.num_qubits or set(o.basis_state) - {"0", "1"}:
                 raise ValueError(f"outcome '{o.basis_state}' is not a {self.num_qubits}-bit string")
         return self

@@ -38,6 +38,7 @@ from src.ui.overlap_view import (build_analysis_view, build_corpus_gap_view, bui
                                  build_paper_view, build_plan_view, build_proposal_view, build_publication_view,
                                  build_search_runs_view, build_view, overlap)
 from src.verification.engine import VerificationEngine
+from src.verification.plan_verifier import NotApproved, load_runs, verify_plan
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
 SUPPORTED = (".pdf", ".docx", ".txt")
@@ -295,6 +296,16 @@ def research_page():
                 focus("plans", f"RP-{lin}", f"Saved as revision {plan['revision']}")
             except PlanEditError as exc:
                 focus("plans", f"RP-{lin}", f"Not saved: {exc}")
+        elif kind == "plan_verify":
+            lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
+            try:
+                res = verify_plan(lin, engine)
+                focus("plans", f"RP-{lin}", {"pass": "Verified: the plan holds in simulation",
+                                             "fail": "Verification failed: see the checks",
+                                             "hold": "Can't verify yet: the plan is missing information"}[res["verdict"]])
+                ss.focus["tab"] = "verdict"
+            except NotApproved as exc:
+                focus("plans", f"RP-{lin}", str(exc))
         elif kind == "plan_decide":
             lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
             try:
@@ -363,8 +374,8 @@ def research_page():
 
     papers = [build_paper_view(pid, p) for pid, p in pipe.library.papers()] + ss.paper_errors
     gaps = corpus_gaps + [build_gap_view(g, planned.get(g.gap_id)) for g in pipe.gaps if not g.gap_id.startswith("CG-")]
-    plans = [build_proposal_view(pl, gap_rows[f"CG-{pl['gap_id']}"][0].title if f"CG-{pl['gap_id']}" in gap_rows else "")
-             for pl in proposals_db]
+    plans = [build_proposal_view(pl, gap_rows[f"CG-{pl['gap_id']}"][0].title if f"CG-{pl['gap_id']}" in gap_rows else "",
+                                 load_runs(pl["lineage"])) for pl in proposals_db]
     plans += [build_plan_view(plan, pipe.reports[pid], gap_titles.get(plan.gap_id, plan.gap_id), ss.plan_times.get(pid, ""))
               for pid, plan in reversed(list(pipe.plans.items())) if pid in pipe.reports]
     if getattr(llm, "last_model_used", None) and llm.last_model_used != llm.model_name:

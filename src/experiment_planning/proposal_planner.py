@@ -50,6 +50,8 @@ RULES:
 7. "circuit" is optional and only for a simulatable plan: at most 10 qubits; gates H, X, Y, Z, S, T, SDG, TDG,
    RX/RY/RZ (with "params": [radians]), CX, CZ, SWAP ([control, target]); bitstrings in Qiskit order |q_{n-1}...q_0>.
    expected_outcomes are YOUR theoretical predictions; explain the theory in "prediction_basis". Otherwise null.
+   Optional: "expected_state" (the target pure state, {bitstring: [re, im]}) for a state-fidelity check, and
+   "expected_outcomes_noisy" (your predictions under the noise parameters you list) for a noise-consistency check.
 Return ONLY a JSON object:
 {"title": "...", "research_problem": "...", "research_question": "...?", "objectives": ["..."], "hypothesis": "...",
  "motivation": "...",
@@ -65,7 +67,8 @@ Return ONLY a JSON object:
  "feasibility_class": "simulatable | needs_hardware | needs_physical_validation", "feasibility_reason": "...",
  "missing_information": ["..."],
  "circuit": {"num_qubits": 2, "gates": [{"name": "H", "target_qubits": [0]}],
-             "expected_outcomes": [{"basis_state": "00", "expected_probability": 0.5}], "prediction_basis": "..."}}"""
+             "expected_outcomes": [{"basis_state": "00", "expected_probability": 0.5}], "prediction_basis": "...",
+             "expected_state": null, "expected_outcomes_noisy": []}}"""
 
 
 def classify_feasibility(gap: Gap, tools_score: float) -> Tuple[str, str]:
@@ -232,7 +235,11 @@ class ProposalPlanner:
                                        expected_outcomes=[ExpectedOutcome(basis_state=str(o["basis_state"]),
                                                                           expected_probability=float(o["expected_probability"]))
                                                           for o in c.get("expected_outcomes", [])],
-                                       prediction_basis=str(c.get("prediction_basis") or ""))
+                                       prediction_basis=str(c.get("prediction_basis") or ""),
+                                       expected_state=c.get("expected_state") or None,
+                                       expected_outcomes_noisy=[ExpectedOutcome(basis_state=str(o["basis_state"]),
+                                                                                expected_probability=float(o["expected_probability"]))
+                                                                for o in c.get("expected_outcomes_noisy") or []])
                 total = sum(o.expected_probability for o in circuit.expected_outcomes)
                 if circuit.expected_outcomes and abs(total - 1) > 0.02:
                     warnings.append(f"Predicted probabilities sum to {total:.2f}, not 1; verification will flag this.")

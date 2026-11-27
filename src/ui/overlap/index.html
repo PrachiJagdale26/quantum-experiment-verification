@@ -245,6 +245,7 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
   corpus_gaps:['Reading verified limitations, open problems and future work','Merging statements several papers share','Finding untried method × platform and method × noise pairs','Rewriting gaps as research questions (labelled)','Saving candidates'],
   novelty:['Building queries from the gap’s dimensions and synonyms','Searching OpenAlex and Crossref','Searching arXiv (3 s between requests)','Following works that cite the supporting papers','Comparing the closest papers dimension by dimension','Classifying by fixed rules and recording coverage'],
+  verify:['Converting the approved plan into a circuit specification','Checking structure, qubits and gates','Simulating the ideal statevector','Comparing predictions, TVD and state fidelity','Simulating the stated noise (exact density matrix)','Recording the run against this revision'],
   proposal:['Loading the gap, its evidence and its novelty investigation','Classifying feasibility by rule','Asking the model for a grounded proposal','Checking every quote against the sources','Listing what is still missing'],
   plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
   proposals:['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report']};
@@ -514,7 +515,16 @@ const PSRC={literature:'pass',gap_evidence:'pass',assumption:'hold',researcher:'
 let editing=null;
 function proposalRow(p){const [c,l]=PSTAT[p.status];
   return `<span class="id">${esc(p.id)}<span class="chip ${FEAS[p.feasibility]}">${esc(p.feasibility_label)}</span></span><span class="t">${esc(p.title)}</span>
-    <span class="st ${c}">${l} · revision ${p.revision}</span>`;}
+    <span class="st ${p.verification&&!p.verification.stale?VP[p.verification.v][0]:c}">${l} · rev ${p.revision}${p.verification&&!p.verification.stale?` · ${VP[p.verification.v][1].toLowerCase()}`:''}</span>`;}
+function noisePanel(v){
+  if(!v.noise||!v.noise.length)return `<div class="panel"><h3>Noise</h3><p class="hint" style="margin:0">The plan states no noise parameters, so only the ideal circuit was simulated. Add parameters such as a depolarizing probability, readout error, T1 or T2 (with their source) to simulate them.</p></div>`;
+  const top=pr=>Object.entries(pr).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,x])=>`P(${esc(k)}) = ${x.toFixed(3)}`).join(', ');
+  return `<div class="panel"><h3>Under the plan’s stated noise</h3><p class="sub">Exact density-matrix simulation (qiskit-aer, no shot noise); readout error applied analytically. Ranges run at both ends.</p>
+    <div class="tblwrap"><table class="cmp"><thead><tr><th>Condition</th><th>Values and their source</th><th>Result</th></tr></thead><tbody>
+    ${v.noise.map(r=>`<tr><td>${esc(r.label)}</td><td class="hint">${[...new Set(Object.values(r.sources))].map(esc).join('<br>')}</td>
+      <td><div>${top(r.probabilities)}</div><div class="hint">TVD to ideal ${r.tvd_to_ideal}${r.fidelity!=null?` · fidelity ${r.fidelity}`:''}</div>
+      ${'matched' in r?`<span class="chip ${r.matched?'pass':'fail'}">${r.matched?'Matches the noisy prediction':'Does not match the noisy prediction'}</span>`:''}
+      ${r.ideal_prediction_under_noise?`<span class="chip ${r.ideal_prediction_under_noise.matched?'pass':'hold'}">${r.ideal_prediction_under_noise.matched?'Ideal prediction still holds':'Ideal prediction no longer holds'}</span>`:''}</td></tr>`).join('')}</tbody></table></div></div>`;}
 function sectionView(s){
   const v=s.value,empty=Array.isArray(v)?!v.length:!v;
   const body=empty?`<p class="hint" style="margin:0">${s.required?'<b class="hold">Required, not written yet.</b>':'Not written.'}</p>`
@@ -543,9 +553,16 @@ function proposalView(p){
       <span>Revision ${p.revision}</span><span>${esc(p.generated_by==='template'?'Template draft':`Written by ${p.generated_by}`)}</span></div>
     <div class="tag ${c}">${l}</div><h2>${esc(p.title)}</h2>
     <p class="lead"><span class="chip ${FEAS[p.feasibility]}">${esc(p.feasibility_label)}</span> ${esc(p.feasibility_reason)}</p>
-    <div class="act"><button class="btn primary" data-act="plan_edit_open">Edit plan</button><button class="btn" data-act="plan_redraft">Draft a new version</button></div>
+    ${p.verification?`<p style="margin:0 0 8px"><span class="tag ${VP[p.verification.v][0]}" style="margin:0"><span class="ket">${VP[p.verification.v][2]}</span>${VP[p.verification.v][1]}</span>
+      <span class="hint"> ${p.verification.stale?`(revision ${p.verification.revision}; the plan has changed since)`:`on revision ${p.verification.revision}`}</span></p>`:''}
+    <div class="act">${p.can_verify?`<button class="btn primary" data-act="plan_verify">${p.verification&&!p.verification.stale?'Verify again':`Verify revision ${p.revision}`}</button>`:''}
+      <button class="btn ${p.can_verify?'':'primary'}" data-act="plan_edit_open">Edit plan</button><button class="btn" data-act="plan_redraft">Draft a new version</button></div>
+    ${p.can_verify?'':'<p class="hint">Approve the plan to verify it. Verification always runs on the approved revision.</p>'}
     ${p.missing.length?`<ul class="missing">${p.missing.map(m=>`<li><span class="ket">|?⟩</span><span>${esc(m)}</span></li>`).join('')}</ul>`:''}
     ${p.warnings.length?`<p class="hint">${p.warnings.map(esc).join(' ')}</p>`:''}</section>
+  ${tabBar(RTABS,RTABS.some(x=>x[0]===ptab)?ptab:'plan',{verdict:p.verification?[VP[p.verification.v][1],p.verification.v==='fail'?'f':p.verification.v==='hold'?'h':'']:null,
+     checks:p.verification?checkCounts(p.verification).checks:null})}
+  <div role="tabpanel" id="tp">${(RTABS.some(x=>x[0]===ptab)&&ptab!=='plan')?verificationTab(p,ptab):`
   <section class="board"><div>
     <div class="panel"><h3>Proposal</h3><p class="sub">Generated text is a draft for you to check; nothing here is a finding.</p>
       ${p.sections.slice(0,6).map(sectionView).join('')}</div>
@@ -559,7 +576,19 @@ function proposalView(p){
       <div class="row" style="margin-top:10px"><button class="btn primary" data-decide="approved" ${canApprove?'':'disabled'}>Approve</button>
         <button class="btn" data-decide="changes_requested">Request changes</button><button class="btn" data-decide="rejected">Reject</button></div>
       ${canApprove?'':`<p class="hint">To approve, fill in: ${esc(p.empty_required.join(', '))}.</p>`}</div>
-    <div class="panel"><h3>Audit trail</h3><ul class="plain">${hist}</ul>${appr?`<h4 class="fh">Decisions</h4><ul class="plain">${appr}</ul>`:''}</div></div></section>`;}
+    <div class="panel"><h3>Audit trail</h3><ul class="plain">${hist}</ul>${appr?`<h4 class="fh">Decisions</h4><ul class="plain">${appr}</ul>`:''}
+      ${p.runs.length?`<h4 class="fh">Verification runs</h4><ul class="plain">${p.runs.map(r=>`<li>${esc(VP[r.verdict][1])} on revision ${r.revision} · ${esc((r.at||'').slice(0,16).replace('T',' '))}</li>`).join('')}</ul>`:''}</div></div></section>`}</div>`;}
+const RTABS=[['plan','Plan'],['verdict','Verification'],['checks','Checks'],['report','Report']];
+function verificationTab(p,t){
+  const v=p.verification;
+  if(!v)return `<div class="panel"><h3>Not verified yet</h3><p class="hint" style="margin:0">${p.can_verify?'Choose “Verify”. The circuit is simulated, predictions, TVD and state fidelity are checked, and any stated noise is simulated.':'Approve the plan first; verification always runs on an approved revision.'}</p></div>`;
+  const stale=v.stale?`<p class="callout"><b>This run verified revision ${v.revision}.</b> The plan has changed since; approve and verify the new revision.</p>`:'';
+  if(t==='checks')return stale+checksTab(v);
+  if(t==='report')return stale+`<div class="row"><button class="btn primary" data-dl="md">Download Markdown report</button></div><pre class="md">${esc(v.md)}</pre>`;
+  return `${stale}<p class="lead" style="margin:0 0 16px">${esc(v.head)}</p><section class="board">${picture(v)}${side(v)}</section>
+    ${v.state_fidelity!=null?`<p class="hint">State fidelity with the plan’s expected state: <b>${v.state_fidelity.toFixed(4)}</b> (amplitudes, including phase).</p>`:''}
+    <div class="stack-gap">${noisePanel(v)}</div>
+    <p class="note">${esc(v.simulator)}. ${v.feasibility==='simulatable'?'Covers simulation only, not physical hardware.':v.feasibility==='needs_hardware'?'This plan requires quantum hardware; hardware validation has not been performed.':'This plan requires additional physical validation that simulation cannot provide.'}</p>`;}
 function proposalEdit(p){
   const ta=(s)=>`<label class="pe"><span>${esc(s.label)}${s.required?' <b class="hold">required</b>':''}${s.kind==='list'?' <span class="hint">(one per line)</span>':''}</span>
     <textarea class="in" rows="${s.kind==='list'?4:3}" data-pe="${esc(s.key)}" data-kind="${s.kind}">${esc(Array.isArray(s.value)?s.value.join('\n'):s.value)}</textarea></label>`;
@@ -786,7 +815,7 @@ window.addEventListener('message',e=>{
   if(meta.seq!==lastSeq){
     const first=lastSeq===null;lastSeq=meta.seq;busy=null;
     const f=a.focus||{};
-    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab='plan';
+    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab=f.tab||'plan';
       if(f.sec==='literature')litMode=meta.lit_mode||(f.id?'detail':'collect');$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
   }
   for(const s of Object.keys(D)){const l=[...(pending[s]||[]),...D[s]];if(!l.some(x=>x.id===sel[s]))sel[s]=l[0]?.id;}
@@ -812,6 +841,7 @@ function act(kind){
   if(kind==='gap_weights'){const weights={};document.querySelectorAll('[data-w]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))weights[i.dataset.w]=v});emit({kind,weights,id:p&&p.id});return}
   if(kind==='plan_gap'&&p.kind==='corpus'){busy={sec:'plans',title:`Drafting a proposal for ${p.id}`,file:p.title,step:0,steps:STEPS.proposal};sec='plans';render();emit({kind,gap_id:p.id});return}
   if(kind==='plan_redraft'){busy={sec:'plans',title:`Drafting a new proposal for ${p.gap_id}`,file:p.gap_title,step:0,steps:STEPS.proposal};render();emit({kind,gap_id:p.gap_id});return}
+  if(kind==='plan_verify'){busy={sec:'plans',title:`Verifying ${p.id}, revision ${p.revision}`,file:p.title,step:0,steps:STEPS.verify};ptab='verdict';render();emit({kind,id:p.id});return}
   if(kind==='plan_edit_open'){editing=p.id;render();$('#pane').scrollTop=0;return}
   if(kind==='plan_edit_cancel'){editing=null;render();return}
   if(kind==='plan_gap'){busy={sec:'plans',title:`Planning an experiment for ${p.id}`,file:p.title,step:0};const gid=p.id;sec='plans';render();emit({kind,gap_id:gid});return}
@@ -830,6 +860,7 @@ document.addEventListener('click',e=>{
   const p=cur();
   if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
   if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.dl&&p&&p.verification){download(p.verification.md,`${p.id}-rev${p.verification.revision}-verification.md`);return}
   if(t.dataset.decide){const p2=cur(),note=($('#decnote')?.value||'').trim();
     if(t.dataset.decide!=='approved'&&note.length<10){toast('Add a short note (10+ characters) saying why.');$('#decnote')?.focus();return}
     emit({kind:'plan_decide',id:p2.id,decision:t.dataset.decide,note});toast('Saving your decision…');return}

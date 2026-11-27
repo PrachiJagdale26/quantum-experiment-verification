@@ -1,6 +1,31 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval) **done 2026-11-28**. Next: Phase 6 (verification of approved plans, noise).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval) and Phase 6 (verification of approved plans) **done 2026-11-28**. Next: Phase 7 (orchestration).
+
+Phase 6 results:
+- **Adapter (`src/verification/plan_verifier.py`):** an approved plan revision becomes a `ProposalSpecification`. Assumed parameters are listed as assumptions; a missing circuit stays missing, so the plan is held with the missing items listed, never filled in.
+- **Checks.** The existing engine runs checks 1–7 (structure, qubit indices, gates, circuit, normalisation, predicted vs simulated, TVD). New:
+  - **8 State fidelity:** against the plan's expected state (amplitudes, including phase), threshold 0.99. It catches a GHZ-minus target, whose measurement probabilities are identical to GHZ-plus.
+  - **9a Noise parameters:** probabilities in [0, 1], positive times, T2 ≤ 2·T1. An impossible combination fails.
+  - **9b Predictions under noise:** checked against the plan's noisy predictions when it gives them. Otherwise the effect is reported (TVD to ideal, fidelity, whether the ideal prediction still holds) without a judgement.
+  - **Assumptions:** lists any simulated value resting on an assumption, including the default gate time used for T1/T2.
+  - **Hardware status:** states that simulation is not hardware validation, using the plan's feasibility class.
+  - The verdict uses the existing fixed rules; any failure fails it, and no model output can change it.
+- **Noise (`src/quantum/noise.py`):** exact density-matrix simulation with qiskit-aer 0.18.4 (depolarizing, thermal relaxation from T1/T2 and gate times); readout error is applied analytically. Deterministic, with no shot noise.
+  - Plan parameters map onto noise by name; a range runs at both ends.
+  - When two parameters set the same quantity, the researcher's beats the literature's beats an assumption, and the conflict is reported.
+- **Stored runs:** each run is a `VerificationRun` on the exact revision. Only an approved revision can be verified; after an edit, the old run is shown as covering an earlier revision.
+- **UI:** a proposal has Plan, Verification, Checks and Report tabs.
+  - The Verification tab reuses the probability disks, circuit drawing, state-overlap and TVD panels, plus a noise table showing each value's source.
+  - "Verify revision N" appears only on an approved plan; runs are listed in the audit trail.
+- **Live check (scratch copy):** Gemini's error-correction plan predicted that a 3-qubit GHZ circuit gives `000` with probability 1.
+  - Verification failed it ("Predicted P(000) = 1.00; the circuit gives 0.50", TVD 0.50).
+  - In the browser: corrected the prediction and added the target state → revision 2 (draft, the old run marked as revision 1) → approved → verified. It passed with state fidelity 1.000; under the stated depolarizing range the fidelity is 0.998 to 0.898.
+- **Known limitations:**
+  - Noise parameters are recognised by name (depolarizing / error rate, readout, T1, T2, gate time); other noise is not modelled.
+  - A range runs at its two ends, not swept.
+  - The literature-grounding check still uses the starter knowledge base, not the research corpus.
+- **Tests:** 9 new offline tests covering the noise physics (readout flips, relaxation towards |0⟩, T2 > 2·T1), parameter mapping and precedence, a wrong GHZ prediction, fidelity including the phase case, noisy predictions with flagged assumptions, impossible noise, an unspecified plan, and approval gating. 157 pass; the 3 Vertex tests are deselected because billing is disabled.
 
 Phase 5 results:
 - **Research proposal (`src/experiment_planning/schema.py`):** all 20 sections Module 6 lists, plus a feasibility class (simulatable, requires quantum hardware, or requires additional physical validation) with its reason, an optional circuit with theoretical predictions, missing information, warnings, and who wrote it.
