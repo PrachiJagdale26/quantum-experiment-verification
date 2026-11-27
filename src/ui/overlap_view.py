@@ -358,6 +358,10 @@ def build_publication_view(pub) -> Dict[str, Any]:
         "cited_by": max([i.get("cited_by_count") or 0 for i in by_source.values()] or [0]) or None,
         "conflicts": meta.get("identifier_conflicts", []),
         "fulltext_pages": meta.get("fulltext_pages"),
+        "curation": pub.curation_status or "unreviewed",
+        "curation_note": pub.curation_note,
+        "analysed": pub.analysed_at is not None,
+        "analysis_summary": meta.get("analysis"),
         # Work type as the sources report it (article, preprint, posted-content, ...), so a reader can tell
         # peer-reviewed articles from repository deposits; nothing is filtered out on the system's judgement.
         "work_types": sorted({str(i.get("type")).replace("-", " ") for i in by_source.values() if i.get("type")}),
@@ -370,3 +374,47 @@ def build_search_runs_view(runs) -> List[Dict[str, Any]]:
     return [{"id": r.id, "source": r.source, "query": r.query, "status": r.status, "returned": r.result_count,
              "total": r.total_available, "error": r.error, "at": r.started_at.strftime("%Y-%m-%d %H:%M") if r.started_at else ""}
             for r in runs]
+
+
+# ----------------------------------------------------------------------------------
+# Research analysis views (Phase 3)
+# ----------------------------------------------------------------------------------
+def build_analysis_view(record) -> Optional[Dict[str, Any]]:
+    """A stored PaperAnalysisRecord, grouped by field, with each statement's provenance stated."""
+    if record is None:
+        return None
+    from src.research_analysis import FIELD_LABELS
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for st in record.statements:
+        p = st.provenance
+        groups.setdefault(st.field, []).append({
+            "text": st.text, "kind": st.kind, "confidence": round(st.confidence, 2), "extractor": st.extractor,
+            "excerpt": p.excerpt if p else None, "verified": bool(p and p.verified), "page": p.page if p else None,
+        })
+    order = [f for f in FIELD_LABELS if f in groups]
+    d = record.dimensions
+    return {
+        "from": record.analysed_from, "llm": record.llm, "warnings": record.warnings,
+        "fields": [{"field": f, "label": FIELD_LABELS[f], "items": groups[f]} for f in order],
+        "dims": {"Platforms": d.platforms, "Methods": d.methods, "Noise": d.noise, "Phenomena": d.phenomena,
+                 "Metrics": d.metrics, "Qubit counts": [str(q) for q in d.qubit_counts]},
+        "counts": {k: sum(1 for s in record.statements if s.kind == k) for k in ("direct", "interpretation", "unverified")},
+    }
+
+
+def build_corpus_view(result, titles: Dict[int, str]) -> Optional[Dict[str, Any]]:
+    if result is None:
+        return None
+    pid = lambda i: f"PUB-{i}"
+    return {
+        "papers": result.papers, "excluded": result.excluded, "not_analysed": result.not_analysed,
+        "generated_at": result.generated_at[:16].replace("T", " "),
+        "themes": [{"label": t.label, "papers": [{"id": pid(i), "title": titles.get(i, "")} for i in t.publication_ids]}
+                   for t in result.themes],
+        "untried": result.untried_in_corpus,
+        "recurring": [{"field": r.field, "representative": r.representative, "papers": r.papers,
+                       "members": [{"id": pid(m["publication_id"]), "title": m["title"], "text": m["text"], "kind": m["kind"],
+                                    "page": m["page"]} for m in r.members]} for r in result.recurring],
+        "method_platform": [{"row": c.row, "col": c.col, "n": len(c.publication_ids)} for c in result.method_platform],
+        "method_noise": [{"row": c.row, "col": c.col, "n": len(c.publication_ids)} for c in result.method_noise],
+    }

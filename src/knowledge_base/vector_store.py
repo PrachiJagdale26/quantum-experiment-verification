@@ -108,6 +108,7 @@ class QuantumKnowledgeBase:
         # Collections are per embedding model so vectors from different models are never mixed.
         self.collection_name = f"{collection_name}__{_slug(self.model_name)}__cosine"
         self._initialize_backends()
+        self._hydrate_lexical()
         if require_semantic and not self.is_semantic:
             raise KnowledgeBaseUnavailable("Semantic retrieval required but unavailable: " + "; ".join(self.degraded_reasons))
 
@@ -136,6 +137,20 @@ class QuantumKnowledgeBase:
 
         if self.degraded_reasons:
             logger.warning("Knowledge base is DEGRADED (word matching, not semantic): " + "; ".join(self.degraded_reasons))
+
+    def _hydrate_lexical(self) -> None:
+        """After a restart Chroma still holds every chunk; load them so keyword search covers the same corpus."""
+        if not self.use_chroma:
+            return
+        try:
+            got = self.collection.get(include=["documents", "metadatas"])
+            for cid, text, meta in zip(got.get("ids", []), got.get("documents", []), got.get("metadatas", [])):
+                meta = meta or {}
+                self.fallback.add(DocumentChunk(chunk_id=cid, text=text or "", source_filename=meta.get("source_filename", ""),
+                                                page_number=meta.get("page_number"), section_name=None,
+                                                char_start=0, char_end=len(text or "")), meta.get("title", ""))
+        except Exception as exc:
+            logger.error(f"Could not load stored chunks for keyword search: {exc}")
 
     @property
     def is_semantic(self) -> bool:
@@ -203,6 +218,48 @@ class QuantumKnowledgeBase:
             except Exception as exc:
                 logger.error(f"Semantic retrieval failed, using word matching for this query: {exc}")
         return self.fallback.search(query, top_k=top_k)
+
+    def retrieve_hybrid(self, query: str, top_k: int = 5, expand: bool = True, rrf_k: int = 60) -> List[Dict[str, Any]]:
+        """
+        Hybrid retrieval: semantic (embeddings) + BM25 keywords over the query and its ontology variants,
+        merged by reciprocal rank fusion. Each hit lists which retrievers and queries found it; scores are
+        ranking signals, never evidence that two passages say the same thing.
+        """
+        from .lexical import BM25Index
+        from .ontology import expand_query
+
+        if not hasattr(self, "_bm25") or self._bm25.documents is not self.fallback.documents:
+            self._bm25 = BM25Index(self.fallback.documents)
+        variants = expand_query(query) if expand else [(query, "exact")]
+        pool = max(top_k * 3, 10)
+        fused: Dict[str, Dict[str, Any]] = {}
+
+        # Synonym variants are near-equivalent wording; related-concept variants are only hints.
+        weight = {"semantic": 1.0, "bm25": 1.0, "bm25-synonym": 0.6, "bm25-related": 0.3}
+
+        def add(hit: Dict[str, Any], rank: int, how: str, q: str):
+            entry = fused.setdefault(hit["chunk_id"], {**{k: hit.get(k) for k in ("chunk_id", "text", "source_filename",
+                                                                                  "page_number", "title")},
+                                                      "rrf": 0.0, "found_by": [], "semantic": None, "bm25": None})
+            entry["rrf"] += weight.get(how, 0.5) / (rrf_k + rank)
+            entry["found_by"].append(f"{how}:{q}" if q != query else how)
+            if how == "semantic":
+                entry["semantic"] = hit.get("score")
+            elif how.startswith("bm25"):
+                entry["bm25"] = max(entry["bm25"] or 0.0, hit.get("bm25") or 0.0)
+
+        if self.is_semantic:
+            for r, h in enumerate(self.retrieve(query, top_k=pool), 1):
+                add(h, r, "semantic", query)
+        for q, kind in variants:
+            for r, h in enumerate(self._bm25.search(q, top_k=pool), 1):
+                add(h, r, "bm25" if kind == "exact" else f"bm25-{kind}", q)
+        ranked = sorted(fused.values(), key=lambda e: e["rrf"], reverse=True)[:top_k]
+        for e in ranked:
+            e["rrf"] = round(e["rrf"], 5)
+            e["score"] = e["semantic"] if e["semantic"] is not None else 0.0
+            e["retrieval"] = "hybrid"
+        return ranked
 
     def seed_starter_corpus(self) -> int:
         """Index the built-in reference texts (textbook-style summaries, see starter_corpus.py)."""

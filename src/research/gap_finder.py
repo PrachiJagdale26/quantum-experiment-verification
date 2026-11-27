@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from ..knowledge_base.vector_store import QuantumKnowledgeBase
 from ..llm.client import ConfigurableLLMClient
+from ..llm.json_utils import parse_llm_json
 from ..llm.prompts import GAP_IDENTIFICATION_PROMPT
 from ..schemas.research_gap import GapEvidence, ResearchGap
 from ..schemas.research_paper import ResearchPaperAnalysis
@@ -266,7 +267,7 @@ class GapFinder:
         try:
             raw = self.llm.complete(system_prompt=GAP_IDENTIFICATION_PROMPT, user_prompt=user, temperature=0.0,
                                     fallback_to_demo=False, purpose="gap_refinement")
-            data = json.loads(re.sub(r"^```(?:json)?|```$", "", raw.strip()).strip())
+            data = parse_llm_json(raw)
             by_id = {c.cid: c for c in cands}
             refined: List[_Candidate] = []
             used: Set[str] = set()

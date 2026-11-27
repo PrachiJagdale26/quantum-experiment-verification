@@ -180,6 +180,10 @@ td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:t
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 10px 10px 18px;border-radius:14px;display:flex;gap:14px;align-items:center;box-shadow:0 14px 34px -10px rgba(10,5,50,.5);max-width:calc(100% - 32px);z-index:10}
 .toast[hidden],.toast button[hidden]{display:none}
 .toast button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:36px;padding:0 8px}
+.curate{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px}.seg-b{border:1px solid var(--rule);background:var(--surf);border-radius:10px;padding:6px 12px;min-height:36px;cursor:pointer}.seg-b[aria-pressed=true]{background:var(--amp);color:var(--on);border-color:var(--amp)}
+.dims{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:8px 0 14px}.fh{font-size:14px;margin:18px 0 8px;font-weight:500}
+.stmt{padding:10px 14px;border-radius:12px;background:var(--rail);margin-bottom:8px}.stmt p{margin:0 0 6px}.stmt.unverified{opacity:.7;border-left:3px solid var(--fail)}
+.stmt-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--mute);align-items:center}.theme summary{cursor:pointer;padding:8px 0}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .in{width:100%;min-height:42px;padding:8px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--surf);font:300 15px Sora,sans-serif;color:var(--ink)}
 .in:focus{outline:2px solid var(--amp);outline-offset:1px}
@@ -231,7 +235,9 @@ const DEC={pass:['Send to panel','Sent to panel'],fail:['Return to author','Retu
 const CS={pass:['pass','Pass'],fail:['fail','Fail'],hold:['hold','Inconclusive'],not:['done','Not run']};
 const TABS=[['verdict','Verdict'],['extracted','What we extracted'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
 const PTABS=[['plan','Plan'],['verdict','Verdict'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
-const STEPS={literature:['Querying OpenAlex','Querying arXiv (3 s between requests, as arXiv asks)','Querying Crossref','Merging duplicates across sources','Saving to the research database'],
+const STEPS={analysis:['Reading the abstract or full text','Asking the model for evidence-backed statements','Checking every quoted passage against the paper','Adding the paper’s own sentences','Tagging research dimensions'],
+  corpus:['Loading analysed papers (excluded ones left out)','Grouping papers into themes','Building the method × platform coverage','Finding statements several papers share'],
+  literature:['Querying OpenAlex','Querying arXiv (3 s between requests, as arXiv asks)','Querying Crossref','Merging duplicates across sources','Saving to the research database'],
   papers:['Reading the document','Finding limitations and future work','Extracting experiments','Indexing into the library'],
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
   plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
@@ -278,7 +284,7 @@ function pstatus(p){
   return V[p.v];}
 function row(p){
   if(sec==='literature'){const [c,l]=AVAIL[p.availability];
-    return `<span class="id">${esc(p.year||'n.d.')}<span class="chip ${c}">${l}</span></span><span class="t">${esc(p.title)}</span>
+    return `<span class="id">${esc(p.year||'n.d.')}<span class="chip ${c}">${l}</span>${p.analysed?'<span class="chip pass">Analysed</span>':''}${p.curation==='excluded'?'<span class="chip fail">Excluded</span>':p.curation==='included'?'<span class="chip pass">Included</span>':''}</span><span class="t" ${p.curation==='excluded'?'style="opacity:.55"':''}>${esc(p.title)}</span>
       <span class="st done">${esc(p.sources.map(s=>SRC_LABEL[s.name]||s.name).join(', '))}</span>`}
   if(sec==='papers'){const [c,t]=p.state?pstatus(p):['pass',`${p.signals} gap signal${p.signals===1?'':'s'}`];
     return `<span class="id">${esc(p.id)}${p.synthetic?'<span class="chip t-future_work">Synthetic</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${esc(t)}</span>`}
@@ -494,7 +500,10 @@ function collectPanel(){
       <div class="fg"><span>Papers</span><b>${D.literature.length}</b></div>
       <div class="fg"><span>With abstract</span><b>${D.literature.filter(p=>p.availability!=='metadata_only').length}</b></div>
       <div class="fg"><span>Metadata only</span><b>${D.literature.filter(p=>p.availability==='metadata_only').length}</b></div>
-      <div class="fg"><span>Full text</span><b>${D.literature.filter(p=>p.availability==='full_text').length}</b></div></div></div></div>
+      <div class="fg"><span>Full text</span><b>${D.literature.filter(p=>p.availability==='full_text').length}</b></div>
+      <div class="fg"><span>Analysed</span><b>${D.literature.filter(p=>p.analysed).length}</b></div>
+      <div class="fg"><span>Excluded</span><b>${D.literature.filter(p=>p.curation==='excluded').length}</b></div>
+      <div class="row" style="margin-top:12px"><button class="btn" data-litmode="corpus">Corpus analysis</button></div></div></div></div>
   <div class="stack-gap">${report}</div>${history}`;}
 function litView(p){
   const [c,l]=AVAIL[p.availability],authors=p.authors.join(', ')+(p.author_count>p.authors.length?` and ${p.author_count-p.authors.length} more`:'');
@@ -505,7 +514,12 @@ function litView(p){
     <div class="act">${p.source_url?`<a class="btn primary" href="${esc(p.source_url)}" target="_blank" rel="noopener noreferrer">Open source page</a>`:''}
       ${p.pdf_url?`<a class="btn" href="${esc(p.pdf_url)}" target="_blank" rel="noopener noreferrer">Open PDF</a>`:''}
       ${p.arxiv_id&&p.availability!=='full_text'?`<button class="btn" data-act="lit_fulltext">Get full text from arXiv</button>`:''}
-      <button class="btn" data-litmode="collect">Collect more literature</button></div></section>
+      ${p.availability!=='metadata_only'?`<button class="btn" data-act="lit_analyse">${p.analysed?'Analyse again':'Analyse paper'}</button>`:''}
+      <button class="btn" data-litmode="collect">Collect more literature</button></div>
+    <div class="curate" role="group" aria-label="Corpus decision"><span class="hint">In the corpus?</span>
+      ${[['included','Include'],['excluded','Exclude'],['unreviewed','Undecided']].map(([k,l])=>`<button class="seg-b" data-curate="${k}" aria-pressed="${(p.curation||'unreviewed')===k}">${l}</button>`).join('')}
+      <span class="hint">${p.curation==='excluded'?'Excluded papers are kept but never used for gaps or themes.':p.curation==='included'?'Used for gaps and themes.':'Undecided papers are used until you exclude them.'}</span></div></section>
+  ${p.analysis?analysisPanel(p.analysis):''}
   <section class="board"><div class="panel"><h3>Abstract</h3>
     ${p.abstract?`<p class="sub">From ${esc(SRC_LABEL[p.abstract_source]||p.abstract_source||'source')}, verbatim.</p><p style="margin:0;max-width:72ch">${esc(p.abstract)}</p>`
       :`<p class="errbox" style="color:var(--hold);background:color-mix(in srgb,var(--hold) 10%,transparent)">No source returned an abstract for this paper, so only its metadata is stored. It can be cited but not analysed until the abstract or full text is available.</p>`}
@@ -519,6 +533,40 @@ function litView(p){
     <div class="panel"><h3>Retrieved from</h3>${p.sources.map(s=>`<div class="fg"><span>${link(s.url,SRC_LABEL[s.name]||s.name)||esc(SRC_LABEL[s.name]||s.name)}</span><b style="font-weight:400">${esc(s.retrieved_at)} UTC</b></div>`).join('')}</div>
     ${p.versions.length?`<div class="panel"><h3>Versions</h3>${p.versions.map(v=>`<div class="fg"><span>${link(v.url,v.label)||esc(v.label)}</span><b style="font-weight:400">${esc(v.date||'date not given')}</b></div>`).join('')}</div>`:''}
     ${p.conflicts.length?`<div class="panel"><h3>Identifier conflicts</h3><p class="hint">Sources disagreed; the first value was kept.</p>${p.conflicts.map(x=>`<p class="cid">${esc(JSON.stringify(x))}</p>`).join('')}</div>`:''}</div></section>`;}
+const KIND={direct:['pass','Quote, verified'],interpretation:['t-future_work','Interpretation, evidence verified'],
+  unverified:['fail','Unverified: evidence not found in the paper'],inference:['hold','Inference across papers']};
+function analysisPanel(a){
+  const dims=Object.entries(a.dims).filter(([,v])=>v.length);
+  return `<div class="stack-gap"><div class="panel"><h3>Research analysis</h3>
+    <p class="sub">From the ${a.from==='full_text'?'full text':'abstract'}${a.llm?` by ${esc(a.llm)} plus the paper’s own sentences`:' using the paper’s own sentences (no live model)'}.
+      ${a.counts.direct} verified quotes, ${a.counts.interpretation} verified interpretations${a.counts.unverified?`, <b class="fail">${a.counts.unverified} unverified</b> (shown, never used as evidence)`:''}.</p>
+    ${a.warnings.length?`<p class="hint">${a.warnings.map(esc).join(' ')}</p>`:''}
+    ${dims.length?`<div class="dims">${dims.map(([k,v])=>`<div><span class="hint">${esc(k)}</span><div>${v.map(x=>`<span class="chip t-future_work">${esc(x)}</span>`).join(' ')}</div></div>`).join('')}</div>`:''}
+    ${a.fields.map(f=>`<h4 class="fh">${esc(f.label)} <span class="cnt">${f.items.length}</span></h4>
+      ${f.items.map(it=>{const [c,l]=KIND[it.kind]||KIND.inference;return `<div class="stmt ${it.kind}">
+        <p>${esc(it.text)}</p>
+        <div class="stmt-meta"><span class="chip ${c}">${l}</span>${it.page?`<span>p. ${esc(it.page)}</span>`:''}<span>${esc(it.extractor==='rule-based'?'Paper’s own sentence':it.extractor)}</span><span>confidence ${it.confidence}</span></div>
+        ${it.kind!=='direct'&&it.excerpt?`<details><summary>${it.verified?'Supporting passage':'Passage the model cited (not found)'}</summary><blockquote class="quote"><p>${esc(it.excerpt)}</p></blockquote></details>`:''}</div>`}).join('')}`).join('')}
+  </div></div>`;}
+function corpusView(){
+  const c=meta.corpus,lits=D.literature,inc=lits.filter(p=>p.curation==='included').length,exc=lits.filter(p=>p.curation==='excluded').length,
+    an=lits.filter(p=>p.analysed).length,todo=lits.filter(p=>!p.analysed&&p.curation!=='excluded'&&p.availability!=='metadata_only').length;
+  const head=`<section class="hero">${fringe}<h2>Corpus analysis</h2><p class="lead">What the collected papers have in common and what they leave untouched. Everything here is an inference across papers and lists the papers behind it.</p>
+    <div class="act"><button class="btn primary" data-act="corpus_run">${c?'Run again':'Run cross-paper analysis'}</button>
+      ${todo?`<button class="btn" data-act="lit_analyse_next">Analyse next ${Math.min(5,todo)} of ${todo} unanalysed</button>`:''}
+      <button class="btn" data-litmode="collect">Back to collecting</button></div>
+    <p class="hint">${lits.length} papers: ${an} analysed, ${inc} included, ${exc} excluded, ${lits.length-inc-exc} undecided. Excluded and metadata-only papers are left out.</p></section>`;
+  if(!c)return head+`<div class="panel"><p class="hint" style="margin:0">No cross-paper analysis yet. Analyse some papers, then run it.</p></div>`;
+  const plink=x=>`<button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(x.id)}">${esc(x.title)}</button>`;
+  return head+`<div class="board"><div class="panel"><h3>Themes</h3><p class="sub">Papers grouped by meaning (${c.papers} analysed papers, ${esc(c.generated_at)} UTC). Labels name what is distinctive about each group.</p>
+      ${c.themes.map(t=>`<details class="theme"><summary><b>${esc(t.label)}</b> <span class="cnt">${t.papers.length}</span></summary><ul class="plain">${t.papers.map(x=>`<li>${plink(x)}</li>`).join('')}</ul></details>`).join('')}</div>
+    <div class="side"><div class="panel"><h3>Untried in this corpus</h3><p class="sub">Combinations no collected paper studies, although each side is studied by 2 or more papers. Absence here is not evidence of absence in the literature; Phase 4 checks that.</p>
+      ${c.untried.length?c.untried.slice(0,10).map(u=>`<div class="fg"><span>${esc(u.row)} × ${esc(u.col)}</span><b style="font-weight:400">${u.row_papers} / ${u.col_papers}</b></div>`).join(''):'<p class="hint">None found.</p>'}</div></div></div>
+  <div class="stack-gap"><div class="panel"><h3>Recurring limitations, open problems and future work</h3><p class="sub">Verified statements that two or more different papers make.</p>
+    ${c.recurring.length?c.recurring.map(r=>`<div class="stmt inference"><p><b>${esc(r.representative)}</b></p><div class="stmt-meta"><span class="chip hold">${esc(r.field.replace('_',' '))}</span><span>${r.papers} papers</span></div>
+      <details><summary>Statements</summary>${r.members.map(m=>`<blockquote class="quote"><p>${esc(m.text)}</p><cite>${plink(m)}${m.page?`, p. ${m.page}`:''}</cite></blockquote>`).join('')}</details></div>`).join('')
+      :'<p class="hint">No statement recurs across papers in this corpus. Abstracts rarely state limitations; fetching full texts gives this more to work with.</p>'}</div>
+  <div class="panel"><h3>Coverage: method × platform</h3>${c.method_platform.length?`<table class="stack"><thead><tr><th>Method</th><th>Platform</th><th>Papers</th></tr></thead><tbody>${c.method_platform.map(x=>`<tr><td>${esc(x.row)}</td><td>${esc(x.col)}</td><td>${x.n}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">No paper names both a method and a platform.</p>'}</div></div>`;}
 function loadingView(title,file,steps,step){
   const i=Math.min(step||0,steps.length-1);
   return `<section class="hero">${fringe}<div class="meta">${file?`<span>${esc(file)}</span>`:''}</div>
@@ -545,8 +593,8 @@ function blank(){
   <div class="row"><label class="btn primary" for="file">Upload proposal</label><button class="btn" id="sample">Try the sample Bell-state PDF</button><button class="btn" data-act="reload">Load benchmark cases</button></div></div></div>`;}
 function render(){
   renderNav();renderRail();const p=cur();let html;
-  if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,STEPS[sec],busy.step);
-  else if(sec==='literature')html=(litMode==='collect'||!p)?collectPanel():litView(p);
+  if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,busy.steps||STEPS[sec],busy.step);
+  else if(sec==='literature')html=litMode==='corpus'?corpusView():(litMode==='collect'||!p)?collectPanel():litView(p);
   else if(!p)html=blank();
   else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
   else if(p.state==='bad')html=errorView(p);
@@ -557,7 +605,7 @@ function toast(msg,undo){$('#tmsg').textContent=msg;$('#undo').hidden=!undo;last
   clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').hidden=true,5000);}
 setInterval(()=>{let ch=false;const bump=o=>{if(o&&(o.step||0)<9){o.step=(o.step||0)+1;ch=true}};
   [...pending.papers,...pending.proposals,...Object.values(running)].forEach(bump);bump(busy);if(ch)render();},900);
-function go(s,id){sec=s;if(id)sel[s]=id;if(!list().some(x=>x.id===sel[s]))sel[s]=list()[0]?.id;compose=null;err='';render();$('#pane').scrollTop=0;}
+function go(s,id){sec=s;if(id)sel[s]=id;if(s==='literature'&&id)litMode='detail';if(!list().some(x=>x.id===sel[s]))sel[s]=list()[0]?.id;compose=null;err='';render();$('#pane').scrollTop=0;}
 function download(text,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/markdown'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);}
 
 /* ---------- data in from Python ---------- */
@@ -574,7 +622,7 @@ window.addEventListener('message',e=>{
     const first=lastSeq===null;lastSeq=meta.seq;busy=null;
     const f=a.focus||{};
     if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab='plan';
-      if(f.sec==='literature')litMode=f.id?'detail':'collect';$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
+      if(f.sec==='literature')litMode=meta.lit_mode||(f.id?'detail':'collect');$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
   }
   for(const s of Object.keys(D)){const l=[...(pending[s]||[]),...D[s]];if(!l.some(x=>x.id===sel[s]))sel[s]=l[0]?.id;}
   render();});
@@ -599,6 +647,9 @@ function act(kind){
     sec='papers';sel.papers=pending.papers[0].id;render();emit({kind,token});return}
   if(kind==='remove_paper'||kind==='remove'){emit({kind,id:p.id});return}
   if(kind==='lit_fulltext'){busy={sec:'literature',title:'Downloading the open-access PDF from arXiv',file:p.title,step:0};render();emit({kind,id:p.id});return}
+  if(kind==='lit_analyse'){busy={sec:'literature',title:'Analysing the paper',file:p.title,step:0,steps:STEPS.analysis};render();emit({kind,id:p.id});return}
+  if(kind==='lit_analyse_next'){busy={sec:'literature',title:'Analysing the next papers',file:'Up to 5 unanalysed papers',step:0,steps:STEPS.analysis};render();emit({kind,n:5});return}
+  if(kind==='corpus_run'){busy={sec:'literature',title:'Comparing the papers',file:'',step:0,steps:STEPS.corpus};render();emit({kind});return}
   emit({kind});}
 function decide(p,val,note){localDec[p.id]=val;emit({kind:'decide',id:p.id,dec:val,note:note||''});render();}
 
@@ -607,6 +658,7 @@ document.addEventListener('click',e=>{
   const p=cur();
   if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
   if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.curate){const p2=cur();if(p2)emit({kind:'lit_curate',id:p2.id,status:t.dataset.curate});return}
   if(t.dataset.litmode){litMode=t.dataset.litmode;render();$('#pane').scrollTop=0;return}
   if(t.dataset.goto){const [s,id]=t.dataset.goto.split(':');go(s,id);return}
   if(t.dataset.act){act(t.dataset.act);return}

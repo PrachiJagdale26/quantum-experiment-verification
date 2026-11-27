@@ -39,8 +39,27 @@ def get_engine(url: Optional[str] = None) -> Engine:
             cur.execute("PRAGMA journal_mode=WAL")
             cur.close()
     Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
     _engines[url] = engine
     return engine
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    """Minimal forward migration: add columns that newer models define but an existing database lacks."""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        existing = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in existing:
+                continue
+            ddl_type = col.type.compile(dialect=engine.dialect)
+            default = col.default.arg if col.default is not None and not callable(col.default.arg) else None
+            clause = f" DEFAULT '{default}'" if isinstance(default, str) else (f" DEFAULT {int(default)}" if isinstance(default, bool) else "")
+            with engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl_type}{clause}'))
 
 
 @contextmanager

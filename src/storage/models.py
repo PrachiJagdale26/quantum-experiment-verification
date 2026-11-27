@@ -48,6 +48,10 @@ class Publication(Base):
                                                       doc="True only if full text was actually obtained, not merely linked.")
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False,
                                                doc="Synthetic demo documents; excluded from evaluation and evidence.")
+    curation_status: Mapped[str] = mapped_column(String(16), default="unreviewed",
+                                                 doc="unreviewed | included | excluded: a researcher's corpus decision.")
+    curation_note: Mapped[Optional[str]] = mapped_column(Text)
+    analysed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     raw_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 

@@ -29,8 +29,10 @@ from src.llm.extractor import ProposalExtractor
 from src.research import ExperimentPlanner, GapFinder, PaperIngestError, PaperLibrary, ResearchPipeline
 from src.schemas.proposal import ProposalSpecification
 from src.literature import TOPICS, LiteratureIngestor, list_publications, recent_search_runs
-from src.ui.overlap_view import (build_gap_view, build_paper_view, build_plan_view, build_publication_view,
-                                 build_search_runs_view, build_view, overlap)
+from src.research_analysis import PaperAnalyzer, analyse_corpus, load_analysis
+from src.storage import Publication, session_scope
+from src.ui.overlap_view import (build_analysis_view, build_corpus_view, build_gap_view, build_paper_view, build_plan_view,
+                                 build_publication_view, build_search_runs_view, build_view, overlap)
 from src.verification.engine import VerificationEngine
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
@@ -76,6 +78,7 @@ def research_page():
     st.markdown(REVIEW_CSS, unsafe_allow_html=True)
     kb, llm, engine, extractor, doc_extractor, mode = get_services()
     ingestor = get_ingestor(kb)
+    analyzer = PaperAnalyzer(llm)
     ss = st.session_state
 
     if "pipeline" not in ss:
@@ -168,6 +171,39 @@ def research_page():
             pid = ingestor.ingest_doi(ev.get("doi") or "")
             focus("literature", f"PUB-{pid}" if pid else None,
                   "Added from DOI" if pid else "No record found for that DOI in OpenAlex or Crossref.")
+        elif kind == "lit_curate" and ev.get("status") in ("included", "excluded", "unreviewed"):
+            pid = int(str(ev.get("id", "")).replace("PUB-", "") or 0)
+            with session_scope() as s:
+                pub = s.get(Publication, pid)
+                if pub is not None:
+                    pub.curation_status = ev["status"]
+                    pub.curation_note = (ev.get("note") or "").strip()[:500] or None
+            focus("literature", f"PUB-{pid}", {"included": "Included in the corpus", "excluded": "Excluded from the corpus",
+                                               "unreviewed": "Marked as unreviewed"}[ev["status"]])
+        elif kind == "lit_analyse":
+            pid = int(str(ev.get("id", "")).replace("PUB-", "") or 0)
+            rec = analyzer.analyse(pid)
+            verified = sum(1 for x in rec.statements if x.kind in ("direct", "interpretation"))
+            msg = (rec.warnings[0] if not rec.statements and rec.warnings
+                   else f"Analysed: {len(rec.statements)} statements, {verified} verified against the source")
+            focus("literature", f"PUB-{pid}", msg)
+        elif kind == "lit_analyse_next":
+            n = max(1, min(int(ev.get("n") or 5), 20))
+            with session_scope() as s:
+                todo = [p.id for p in s.query(Publication).filter(Publication.analysed_at.is_(None),
+                                                                  Publication.curation_status != "excluded",
+                                                                  Publication.is_synthetic.is_(False),
+                                                                  Publication.abstract.is_not(None)).limit(n)]
+            for pid in todo:
+                analyzer.analyse(pid)
+            focus("literature", None, f"Analysed {len(todo)} paper{'s' if len(todo) != 1 else ''}" if todo
+                  else "Every paper with an abstract is already analysed.")
+            ss.lit_mode = "corpus"
+        elif kind == "corpus_run":
+            titles = {p.id: p.title for p in list_publications()}
+            ss.corpus_view = build_corpus_view(analyse_corpus(), titles)
+            focus("literature", None, f"Cross-paper analysis of {ss.corpus_view['papers']} papers")
+            ss.lit_mode = "corpus"
         elif kind == "lit_fulltext":
             pid = int(str(ev.get("id", "")).replace("PUB-", "") or 0)
             res = ingestor.fetch_full_text(pid)
@@ -261,11 +297,17 @@ def research_page():
     if llm.live_failure:
         mode = f"LLM: {llm.live_failure}. Using rule-based analysis."
     mode = f"{mode} | {kb.describe()}"
-    literature = [build_publication_view(p) for p in list_publications()]
+    literature = []
+    for p in list_publications():
+        view_ = build_publication_view(p)
+        if view_["analysed"]:
+            view_["analysis"] = build_analysis_view(load_analysis(p.id))
+        literature.append(view_)
     meta = {"mode": mode, "seq": ss.seq, "done": ss.done, "agenda": pipe.agenda_markdown() if pipe.gaps else "",
             "topics": [{"key": k, **v} for k, v in TOPICS.items()],
             "lit_report": ss.get("lit_report"),
             "search_runs": build_search_runs_view(recent_search_runs(limit=12)),
+            "corpus": ss.get("corpus_view"), "lit_mode": ss.pop("lit_mode", None),
             "s2_key": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")), "openalex_key": bool(os.getenv("OPENALEX_API_KEY"))}
     overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature)
 

@@ -1,6 +1,27 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Next: Phase 3 (research analysis).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis) **done 2026-11-28**. Next: Phase 4 (gap discovery and multi-stage novelty).
+
+Phase 3 results:
+- **Paper analysis (`src/research_analysis/paper_analyzer.py`).** Every statement (objective, method, result, limitation, unresolved problem, future work, assumption, and so on) carries provenance:
+  - `direct` means a verbatim quote, `interpretation` means a paraphrase whose quoted evidence was found in the paper, `unverified` means the evidence could not be found (confidence ≤ 0.2, never used downstream), and `inference` is reserved for cross-paper conclusions.
+  - Evidence is checked against the paper text after accent and whitespace normalisation (fuzzy partial match ≥ 92), and the page is recorded when full text exists.
+  - The reference list is stripped before analysis (a heading, an "Online content" block, or a trailing numbered bibliography), so cited titles are no longer tagged as the paper's own work.
+  - Rule-based sentence extraction adds the paper's own limitation, open-problem and future-work sentences that the model missed; it also runs alone when no LLM is available.
+  - LLM JSON containing LaTeX (`\rho`, `\alpha`) is parsed safely (`src/llm/json_utils.py`).
+- **Research dimensions:** ontology tagging (`src/knowledge_base/ontology.py`) of methods, phenomena, platforms, noise and qubit counts, stored as `dim:*` extraction records.
+- **Cross-paper analysis (`cross_paper_analysis.py`).** It covers only analysed papers that are not excluded and not synthetic.
+  - Themes come from average-linkage clustering of embeddings and are labelled by distinctive concepts, with distinctive title words as a fallback.
+  - Method × platform and method × noise coverage matrices; "untried in this corpus" pairs are explicitly labelled as not establishing novelty.
+  - Recurring limitations, open problems, future work and assumptions are built from verified statements only.
+- **Hybrid retrieval:** BM25 combined with semantic search by reciprocal rank fusion, with ontology query variants (exact 1.0, synonym 0.6, related 0.3); every hit reports how it was found.
+- **Curation:** papers can be included, excluded or left undecided, and excluded papers leave all corpus analysis. Old databases gain the new columns by migration.
+- **UI:** an analysis panel with kind badges and supporting passages, curation buttons, "Analyse next 5", and a Corpus analysis view, all checked in the browser on the real database.
+- **Live check (scratch copy of the database):** 22 papers analysed in 53 s, with 97% of the model's statements verified against the text.
+  - Themes separated sensibly after the switch from single to average linkage, which had chained everything into one cluster.
+  - No limitation recurred across papers: the highest cross-paper similarity was 0.42, below the 0.62 threshold. Most records are abstracts only; full text should be fetched before this is read as a finding.
+- **Known limitation:** the verified share varies between runs of the same paper (71% vs 93% seen at temperature 0), because the model's evidence quotes vary. Unverified statements are kept but labelled and excluded, so this affects coverage, not correctness.
+- **Tests:** 119 offline tests pass (9 analysis tests and 5 JSON-parsing tests are new). A fake model returns a fabricated quote, so the verification step is tested honestly.
 
 Phase 2 results:
 - **`src/literature/`.** Collectors for OpenAlex, arXiv, Crossref and Semantic Scholar share one base: a per-source rate limiter (arXiv 3.1 s between requests), retries on 429/5xx, and an on-disk response cache for a week, with API keys excluded from cache keys.

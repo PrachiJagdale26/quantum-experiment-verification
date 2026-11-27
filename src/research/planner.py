@@ -15,6 +15,7 @@ import re
 from typing import Dict, List, Optional, Sequence
 
 from ..llm.client import ConfigurableLLMClient
+from ..llm.json_utils import parse_llm_json
 from ..llm.prompts import EXPERIMENT_PLANNING_PROMPT
 from ..schemas.proposal import CircuitSpec, ExpectedOutcome, ExtractedClaim, GateOperation, ProposalSpecification
 from ..schemas.research_gap import ExperimentPlan, ResearchGap
@@ -188,7 +189,7 @@ class ExperimentPlanner:
         try:
             raw = self.llm.complete(system_prompt=EXPERIMENT_PLANNING_PROMPT, user_prompt=user, temperature=0.2,
                                     fallback_to_demo=False, purpose="experiment_planning")
-            d = json.loads(re.sub(r"^```(?:json)?|```$", "", raw.strip()).strip())
+            d = parse_llm_json(raw)
             c = d["circuit"]
             n = int(c["num_qubits"])
             gates = [GateOperation(**g) for g in c["gates"]]
