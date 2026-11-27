@@ -21,6 +21,8 @@ __pycache__/
 *.env.local
 *.json
 !data/benchmark_cases/*.json
+!data/sample_papers/*.json
+!data/benchmark/**/*.json
 *service-account*.json
 *credential*.json
 credentials/
@@ -45,3 +47,7 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Research database (local, reproducible runs)
+data/research.db
+data/research.db-*

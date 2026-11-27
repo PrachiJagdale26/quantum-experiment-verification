@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overlap Proposal Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=STIX+Two+Text:ital,wght@0,400;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a physicist's review desk — precise, quiet, a little luminous.
+   IDEA: the verdict is an inner product ⟨claim|sim⟩: how much the author's state overlaps the simulated one.
+   PICTURE: circle-notation amplitude disks (area = probability, ring = claim, line = phase), a real circuit diagram, a two-vector overlap angle.
+   COLOUR and TYPE: deep indigo night / lavender day, lilac amplitudes, mint-rose-gold verdicts; Sora UI, STIX Two italic for kets and math.
+   LAYOUT: queue rail, verdict over a faint interference fringe, amplitudes 2/3 + overlap & figures 1/3, one action, collapsed evidence. */
+:root{color-scheme:light dark;
+--bg:light-dark(#f6f5fd,#100f24);--surf:light-dark(#ffffff,#17153a);--rail:light-dark(#eceaf9,#131130);
+--ink:light-dark(#1b1838,#ecebff);--mute:light-dark(#5f5c84,#a3a1cc);--rule:light-dark(#dcd9f0,#2b2858);
+--amp:light-dark(#4b3fd6,#b9b2ff);--ampsoft:light-dark(#e4e1fc,#262259);--on:light-dark(#ffffff,#100f24);
+--pass:light-dark(#0f7a5c,#5fe0b0);--fail:light-dark(#c42d4a,#ff7d8c);--hold:light-dark(#8f5e00,#f5c76b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:300 16px/1.6 Sora,system-ui,sans-serif;overflow-x:clip}
+b,strong,h1,h2,h3{font-weight:500}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amp);outline-offset:3px;border-radius:6px}
+.ket,.math{font-family:"STIX Two Text",Georgia,serif;font-style:italic;font-weight:400;letter-spacing:.01em}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px max(3vw,16px);border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:10px;flex:1}
+.brand svg{width:34px;height:34px}
+.brand h1{margin:0;font-size:18px;line-height:1}
+.brand .ket{font-size:15px;color:var(--mute);margin-left:4px}
+.btn{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--rule);background:var(--surf);cursor:pointer;font-weight:400;display:inline-flex;align-items:center;gap:8px;transition:border-color .15s}
+.btn:hover{border-color:var(--amp)}
+.btn.primary{background:var(--amp);border-color:var(--amp);color:var(--on);font-weight:500}
+.btn.primary.pass{background:var(--pass);border-color:var(--pass)}
+.btn.primary.fail{background:var(--fail);border-color:var(--fail)}
+.btn.primary.hold{background:var(--hold);border-color:var(--hold)}
+.btn[disabled]{opacity:.6;cursor:progress}
+.proto{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px max(3vw,16px);font-size:14px;color:var(--mute);border-bottom:1px solid var(--rule)}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--rail)}
+.seg button{border:0;background:none;padding:6px 12px;min-height:36px;border-radius:9px;cursor:pointer;font-size:14px}
+.seg button[aria-pressed=true]{background:var(--surf);color:var(--amp);font-weight:500;box-shadow:0 1px 3px rgba(20,16,60,.15)}
+.shell{display:grid;grid-template-columns:288px minmax(0,1fr);min-height:calc(100vh - 116px)}
+.rail{background:var(--rail);padding:18px 12px;display:flex;flex-direction:column;gap:10px}
+.rail h2{font-size:14px;font-weight:400;color:var(--mute);margin:0 8px}
+.q{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.q button{width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:14px;padding:12px;cursor:pointer;display:grid;gap:3px}
+.q button:hover{background:var(--surf)}
+.q button[aria-current=true]{background:var(--surf);border-color:var(--rule);box-shadow:0 6px 20px -12px rgba(40,30,140,.5)}
+.q .id{font-size:13px;color:var(--mute)}
+.q .t{font-weight:400;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.keys{font-size:13px;color:var(--mute);margin:auto 8px 0}
+kbd{font:500 12px Sora,sans-serif;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surf)}
+.st{font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--mute)}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
+.st[hidden]{display:none}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.hold{color:var(--hold)}.done{color:var(--mute)}.run{color:var(--amp)}
+main{padding:clamp(20px,3vw,40px) max(3vw,16px);max-width:1120px;width:100%}
+.hero{position:relative;padding:4px 0 26px;isolation:isolate}
+.fringe{position:absolute;right:0;top:-20px;width:min(46%,420px);height:150px;z-index:-1;opacity:.4;-webkit-mask:linear-gradient(90deg,transparent,#000 40%);mask:linear-gradient(90deg,transparent,#000 40%)}
+.meta{font-size:14px;color:var(--mute);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500;padding:4px 14px 4px 10px;border-radius:999px;background:color-mix(in srgb,currentColor 12%,transparent);margin-bottom:12px}
+.tag .ket{font-size:17px}
+.hero h2{font-size:clamp(26px,3.4vw,38px);line-height:1.12;font-weight:400;margin:0;text-wrap:balance;max-width:24ch;letter-spacing:-.01em}
+.board{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)}
+.panel{background:var(--surf);border:1px solid var(--rule);border-radius:20px;padding:clamp(16px,2.2vw,26px)}
+.panel h3{font-size:15px;margin:0 0 4px}
+.panel .sub{font-size:14px;color:var(--mute);margin:0 0 16px;max-width:60ch}
+.disks{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:14px 10px}
+.disk{margin:0;text-align:center}
+.disk svg{width:100%;max-width:96px;aspect-ratio:1;display:block;margin:0 auto}
+.disk .shell{fill:var(--ampsoft);stroke:var(--rule)}
+.disk .fill{fill:var(--amp);transform-box:fill-box;transform-origin:center;animation:fill .9s cubic-bezier(.2,.8,.2,1) both}
+.disk .phase{stroke:var(--on);stroke-width:2;stroke-linecap:round}
+.disk .ring{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:4 3}
+.disk.off .ring{stroke:var(--fail);stroke-width:2}
+.disk figcaption{display:grid;line-height:1.3;margin-top:4px}
+.disk .ket{font-size:19px}
+.disk .num{font-weight:500;font-variant-numeric:tabular-nums}
+.disk .cl{font-size:13px;color:var(--mute)}
+.disk.off .cl{color:var(--fail);font-weight:500}
+@keyframes fill{from{transform:scale(0)}}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--mute);margin-top:18px;padding-top:14px;border-top:1px solid var(--rule)}
+.legend svg{width:16px;height:16px;vertical-align:-3px;margin-right:6px}
+.circ{margin-top:18px}
+.circ svg{width:100%;height:auto;display:block}
+.circ .wire{stroke:var(--mute);stroke-width:1.2}.circ .ghost{stroke:var(--fail);stroke-width:1.2;stroke-dasharray:5 4}
+.circ .ql{font:italic 17px "STIX Two Text",serif;fill:var(--ink)}.circ .ql.bad{fill:var(--fail)}
+.circ .gate{fill:var(--surf);stroke:var(--amp);stroke-width:1.6}.circ .gl{font:500 14px Sora,sans-serif;fill:var(--amp);text-anchor:middle}
+.circ .cl{stroke:var(--amp);stroke-width:1.6}.circ .dot{fill:var(--amp)}.circ .tgt{fill:var(--surf);stroke:var(--amp);stroke-width:1.6}
+.circ .cb{stroke:var(--fail);stroke-width:1.8}.circ .dotb{fill:var(--fail)}.circ .tgtb{fill:var(--surf);stroke:var(--fail);stroke-width:1.8}
+.circ .meter{fill:var(--surf);stroke:var(--mute)}.circ .arc{fill:none;stroke:var(--mute);stroke-width:1.3}
+.circ .why{font:400 13px Sora,sans-serif;fill:var(--fail)}
+.side{display:grid;gap:clamp(16px,2.4vw,28px);align-content:start}
+.ov svg{width:100%;max-width:260px;display:block;margin:6px 0 4px}
+.ov .ax{stroke:var(--rule)}.ov .vs{stroke:var(--amp);stroke-width:3;stroke-linecap:round}.ov .vc{stroke:var(--ink);stroke-width:2;stroke-dasharray:5 4;stroke-linecap:round}
+.ov .vc.off{stroke:var(--fail)}.ov .ang{fill:color-mix(in srgb,var(--fail) 22%,transparent);stroke:var(--fail)}
+.ov text{font:italic 15px "STIX Two Text",serif;fill:var(--ink)}
+.big{font-size:clamp(34px,4vw,46px);font-weight:300;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.big+.math{display:block;font-size:17px;color:var(--mute);margin-top:4px}
+.fg{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--rule)}
+.fg:first-of-type{border-top:0}
+.fg span{color:var(--mute);font-size:14px}.fg b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.missing{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.missing li{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--hold) 10%,transparent)}
+.missing .ket{font-size:22px;color:var(--hold);line-height:1.1;flex:none;width:34px}
+.missing b{display:block}.missing span{font-size:14px;color:var(--mute)}
+.act{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:22px 0}
+.more{position:relative}.more summary{list-style:none}.more summary::-webkit-details-marker{display:none}
+.menu{position:absolute;z-index:5;top:52px;left:0;background:var(--surf);border:1px solid var(--rule);border-radius:14px;padding:6px;min-width:230px;box-shadow:0 18px 40px -16px rgba(20,10,80,.45)}
+.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-radius:9px;cursor:pointer;min-height:44px}
+.menu button:hover{background:var(--rail)}
+.compose{background:var(--surf);border:1px solid var(--rule);border-radius:20px;padding:20px;margin-bottom:22px;display:grid;gap:10px;max-width:660px}
+.compose label{font-weight:500}
+.compose textarea{min-height:112px;padding:12px 14px;font:300 16px/1.5 Sora,sans-serif;border:1px solid var(--rule);border-radius:12px;background:var(--bg);resize:vertical}
+.compose textarea[aria-invalid=true]{border-color:var(--fail);box-shadow:0 0 0 3px color-mix(in srgb,var(--fail) 20%,transparent)}
+.err{color:var(--fail);font-size:14px;margin:0}.hint{color:var(--mute);font-size:14px;margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+details.sec{border-top:1px solid var(--rule)}
+details.sec>summary{cursor:pointer;padding:16px 0;font-weight:500;min-height:44px}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-bottom:18px}
+th{text-align:left;font-weight:400;color:var(--mute);font-size:14px;padding:8px 12px 8px 0;border-bottom:1px solid var(--rule)}
+td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:top}td.nw{white-space:nowrap}
+.cid{font-size:12px;color:var(--mute)}
+.cite{padding:12px 0;border-bottom:1px solid var(--rule)}.cite:last-child{border:0}
+.cite p{margin:4px 0 0;color:var(--mute);font-size:15px;max-width:68ch}
+.note{font-size:13px;color:var(--mute);margin-top:26px;max-width:80ch}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.sk{background:var(--ampsoft);border-radius:10px}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:14px;counter-reset:s}
+.steps li{display:flex;gap:12px;align-items:center;color:var(--mute)}
+.steps li::before{counter-increment:s;content:counter(s);flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--rule);display:grid;place-items:center;font-size:13px}
+.steps li.on{color:var(--ink);font-weight:500}.steps li.on::before{border-color:var(--amp);color:var(--amp);box-shadow:0 0 0 5px var(--ampsoft)}
+.steps li.ok{color:var(--ink)}.steps li.ok::before{content:"✓";background:var(--amp);border-color:var(--amp);color:var(--on)}
+.blank{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:center;max-width:760px;padding:clamp(24px,6vw,72px) 0}
+.blank svg{width:clamp(130px,20vw,190px)}
+.blank h2{font-size:clamp(24px,3vw,32px);font-weight:400;line-height:1.15;margin:0 0 10px}
+.blank p{color:var(--mute);margin:0 0 22px;max-width:46ch}
+.bloch .sph{fill:var(--ampsoft);stroke:var(--rule)}.bloch .eq{fill:none;stroke:var(--mute);stroke-dasharray:3 4}
+.bloch .vec{stroke:var(--amp);stroke-width:3;stroke-linecap:round}.bloch .tip{fill:var(--amp)}.bloch text{font:italic 16px "STIX Two Text",serif;fill:var(--mute)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 10px 10px 18px;border-radius:14px;display:flex;gap:14px;align-items:center;box-shadow:0 14px 34px -10px rgba(10,5,50,.5);max-width:calc(100% - 32px);z-index:10}
+.toast[hidden],.toast button[hidden]{display:none}
+.toast button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:36px;padding:0 8px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.rail{padding:12px}.keys{display:none}
+.q{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:6px;padding-bottom:4px}.q li{flex:0 0 228px;scroll-snap-align:start}}
+@media(max-width:760px){.board{grid-template-columns:1fr}.fringe{width:70%}}
+@media(max-width:600px){.blank{grid-template-columns:1fr}.disks{grid-template-columns:repeat(auto-fill,minmax(76px,1fr))}
+table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--rule)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:6.5em}.stack td::before{content:attr(data-l);float:inline-start;width:6em;margin-inline-start:-6.5em;color:var(--mute);font-size:13px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true" class="bloch"><circle cx="20" cy="20" r="17" class="sph"/><ellipse cx="20" cy="20" rx="17" ry="5.5" class="eq"/><line x1="20" y1="20" x2="29" y2="8" class="vec"/><circle cx="29" cy="8" r="3" class="tip"/></svg>
+    <h1>Overlap</h1><span class="ket" aria-label="claim overlap with simulation">⟨claim|sim⟩</span>
+  </div>
+  <span class="st" id="qcount"></span>
+  <label class="btn" for="file">Upload proposal</label>
+  <input class="vh" type="file" id="file" accept=".pdf,.docx,.txt">
+</header>
+<div class="proto" role="group" aria-label="Prototype state">
+  <span>Prototype state</span>
+  <div class="seg" id="seg">
+    <button data-s="populated" aria-pressed="true">Populated</button>
+    <button data-s="empty" aria-pressed="false">Empty</button>
+    <button data-s="loading" aria-pressed="false">Loading</button>
+    <button data-s="error" aria-pressed="false">Error</button>
+  </div>
+</div>
+<div class="shell">
+  <nav class="rail" aria-label="Review queue"><h2>Waiting for review</h2><ul class="q" id="q"></ul>
+    <p class="keys"><kbd>J</kbd> <kbd>K</kbd> move through the queue</p></nav>
+  <main id="main" aria-live="polite"></main>
+</div>
+<div class="toast" id="toast" hidden><span id="tmsg"></span><button id="undo">Undo</button></div>
+
+<script>
+{
+const V={pass:['pass','Claims hold','|✓⟩'],fail:['fail',"Claims don't hold",'|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
+const DEC={pass:['Send to panel','Sent to panel'],fail:['Return to author','Returned to author'],hold:['Request details','Details requested']};
+const NC='Nielsen & Chuang, Quantum Computation and Quantum Information';
+const PHYS=['CHK-PHYS-01','Hardware feasibility','not','Ideal simulation only. Noise and decoherence aren’t modelled.'];
+const SAMPLES=[
+{id:'P-0413',title:'Biased Bell-pair statistics from an H–CNOT circuit',file:'bell_asymmetric_v3.pdf',v:'fail',n:2,
+ head:'The author claims an 80/20 split; the circuit produces 50/50.',gates:['H 0','CX 0 1'],
+ claim:{'00':.8,'11':.2},sim:{'00':.5,'01':0,'10':0,'11':.5},tol:.05,tvd:.3,fid:.9,
+ checks:[['CHK-STRUC-01','Qubit count','pass','2 qubits stated in Methods.'],['CHK-CIRC-01','Circuit gates','pass','H 0, CX 0 1. All indices within 0–1.'],['CHK-SIM-01','Statevector normalization','pass','Σ|cᵢ|² = 1.000000'],['CHK-DIST-01','Outcome distribution','fail','TVD 0.300 exceeds the 0.05 tolerance. 00: claimed 0.80, simulated 0.50.'],PHYS],
+ cites:[[NC+', §1.3.6','Contradicts','H then CNOT on |00⟩ gives equal weight to |00⟩ and |11⟩, not an 80/20 split.']]},
+{id:'P-0411',title:'Bell state preparation on two transmon qubits',file:'bell_state_proposal.pdf',v:'pass',n:2,
+ head:'Simulation matches the claimed 50/50 split between 00 and 11.',gates:['H 0','CX 0 1'],
+ claim:{'00':.5,'11':.5},sim:{'00':.5,'01':0,'10':0,'11':.5},tol:.05,tvd:0,fid:1,
+ checks:[['CHK-STRUC-01','Qubit count','pass','2 qubits stated in Methods.'],['CHK-CIRC-01','Circuit gates','pass','H 0, CX 0 1. All indices within 0–1.'],['CHK-SIM-01','Statevector normalization','pass','Σ|cᵢ|² = 1.000000'],['CHK-DIST-01','Outcome distribution','pass','TVD 0.000, within the 0.05 tolerance.'],PHYS],
+ cites:[[NC+', §1.3.6','Supports','Defines |Φ+⟩ = (|00⟩ + |11⟩)/√2, prepared by H then CNOT.'],['Bell (1964), On the Einstein Podolsky Rosen paradox','Supports','Describes the correlations the proposal relies on; no conflict found.']]},
+{id:'P-0414',title:'Two-qubit entangler with an extended control line',file:'entangler_draft.docx',v:'fail',n:2,
+ head:'The circuit applies CX to qubit 2, but the register only has qubits 0 and 1.',gates:['H 0','CX 0 2'],bad:1,
+ checks:[['CHK-STRUC-01','Qubit count','pass','2 qubits stated.'],['CHK-CIRC-01','Circuit gates','fail','Gate 2, CX 0 2: target qubit 2 is outside the register (0–1).'],['CHK-SIM-01','Statevector normalization','not','Skipped because the circuit is invalid.'],['CHK-DIST-01','Outcome distribution','not','Skipped because the circuit is invalid.'],['CHK-PHYS-01','Hardware feasibility','not','Skipped.']],cites:[]},
+{id:'P-0415',title:'Entanglement witness for a photonic register',file:'witness_outline.docx',v:'hold',
+ head:'The proposal doesn’t state a qubit count, a circuit or expected outcomes.',
+ missing:[['n','Qubit count','No register size found. Page numbers and the DOI were ignored.'],['U','Gate sequence','No circuit or gate list found in Methods.'],['P','Expected outcomes','No probabilities or target state stated.']],
+ checks:[['CHK-STRUC-01','Qubit count','hold','No qubit count found.'],['CHK-CIRC-01','Circuit gates','hold','No gate sequence found.'],['CHK-SIM-01','Statevector normalization','not','Nothing to simulate.'],['CHK-DIST-01','Outcome distribution','hold','No expected outcomes stated.'],['CHK-PHYS-01','Hardware feasibility','not','Skipped.']],cites:[]},
+{id:'P-0416',title:'Three-qubit GHZ state for a parity-check demonstration',file:'ghz_proposal.pdf',v:'pass',n:3,
+ head:'Simulation matches the claimed 50/50 split between 000 and 111.',gates:['H 0','CX 0 1','CX 1 2'],
+ claim:{'000':.5,'111':.5},sim:{'000':.5,'001':0,'010':0,'011':0,'100':0,'101':0,'110':0,'111':.5},tol:.05,tvd:0,fid:1,
+ checks:[['CHK-STRUC-01','Qubit count','pass','3 qubits stated.'],['CHK-CIRC-01','Circuit gates','pass','H 0, CX 0 1, CX 1 2. All indices within 0–2.'],['CHK-SIM-01','Statevector normalization','pass','Σ|cᵢ|² = 1.000000'],['CHK-DIST-01','Outcome distribution','pass','TVD 0.000, within the 0.05 tolerance.'],PHYS],
+ cites:[[NC,'Supports','A second CNOT extends the Bell circuit to (|000⟩ + |111⟩)/√2.']]}];
+const CS={pass:['pass','Pass'],fail:['fail','Fail'],hold:['hold','Inconclusive'],not:['done','Not run']};
+const STEPS=['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report'];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let Q=[],sel=null,view='populated',compose=null,err='',last=null,next=417;
+
+const fringe=(()=>{let r='';for(let i=0;i<140;i++){const o=Math.cos(i*.16)**2*Math.exp(-(((i-80)/40)**2))*.5;r+=`<rect x="${i*3}" y="0" width="3.2" height="150" fill="var(--amp)" opacity="${o.toFixed(3)}"/>`}
+  return `<svg class="fringe" viewBox="0 0 420 150" preserveAspectRatio="none" aria-hidden="true">${r}</svg>`})();
+const bloch=`<svg viewBox="0 0 120 130" class="bloch" aria-hidden="true"><circle cx="60" cy="62" r="52" class="sph"/><ellipse cx="60" cy="62" rx="52" ry="16" class="eq"/><line x1="60" y1="62" x2="60" y2="16" class="vec"/><circle cx="60" cy="14" r="5" class="tip"/><text x="68" y="12">|0⟩</text><text x="68" y="126">|1⟩</text></svg>`;
+
+function status(p){
+  if(p.state==='run')return['run','Verifying…'];
+  if(p.state==='bad')return['fail','Couldn’t read file'];
+  if(p.dec)return['done',DEC[p.v][1]];
+  return V[p.v];}
+function renderQ(){
+  $('#q').innerHTML=Q.length?Q.map(p=>{const [c,t]=status(p);return `<li><button data-id="${esc(p.id)}" aria-current="${p.id===sel}">
+    <span class="id">${esc(p.id)}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span></button></li>`}).join('')
+    :'<li class="hint" style="padding:8px">The queue is empty.</li>';
+  const open=Q.filter(p=>!p.dec&&p.state!=='bad').length;
+  $('#qcount').textContent=open?`${open} to review`:'';$('#qcount').hidden=!open;}
+
+function disks(p){
+  const R=34;
+  return Object.keys(p.sim).sort().map(k=>{const s=p.sim[k],c=p.claim[k]??0,off=Math.abs(c-s)>p.tol,rs=Math.sqrt(s)*R,rc=Math.sqrt(c)*R;
+    return `<figure class="disk ${off?'off':''}"><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="${R}" class="shell"/>
+    ${s>0?`<circle cx="40" cy="40" r="${rs.toFixed(2)}" class="fill"/><line x1="40" y1="40" x2="40" y2="${(40-rs+3).toFixed(2)}" class="phase"/>`:''}
+    ${c>0?`<circle cx="40" cy="40" r="${rc.toFixed(2)}" class="ring"/>`:''}</svg>
+    <figcaption><span class="ket">|${k}⟩</span><span class="num">${s.toFixed(2)}</span><span class="cl">${c>0||off?`claimed ${c.toFixed(2)}`:'&nbsp;'}</span></figcaption></figure>`}).join('');}
+const sub=i=>`q<tspan dy="4" font-size="12">${i}</tspan>`;
+function circuit(p){
+  const gs=p.gates.map(g=>g.split(' ')),n=p.n,hi=Math.max(n-1,...gs.flatMap(g=>g.slice(1).map(Number))),rows=hi+1;
+  const W=Math.max(300,96+gs.length*62+56),H=rows*46+(hi>=n?22:8),y=i=>24+i*46;let s='';
+  for(let i=0;i<rows;i++){const g=i>=n;s+=`<line x1="40" x2="${W-(g?60:40)}" y1="${y(i)}" y2="${y(i)}" class="${g?'ghost':'wire'}"/><text x="6" y="${y(i)+5}" class="ql ${g?'bad':''}">${sub(i)}</text>`}
+  gs.forEach(([g,a,b],k)=>{const x=86+k*62,bad=k===p.bad;a=+a;
+    if(g==='H')s+=`<rect x="${x-16}" y="${y(a)-16}" width="32" height="32" rx="7" class="gate"/><text x="${x}" y="${y(a)+5}" class="gl">H</text>`;
+    else{b=+b;const L=bad?'cb':'cl';s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)+12}" class="${L}"/><circle cx="${x}" cy="${y(a)}" r="5" class="${bad?'dotb':'dot'}"/><circle cx="${x}" cy="${y(b)}" r="12" class="${bad?'tgtb':'tgt'}"/><line x1="${x-12}" x2="${x+12}" y1="${y(b)}" y2="${y(b)}" class="${L}"/><line x1="${x}" x2="${x}" y1="${y(b)-12}" y2="${y(b)+12}" class="${L}"/>`;
+      if(bad)s+=`<text x="${x+22}" y="${y(b)+22}" class="why">q2 isn’t in the register</text>`}});
+  for(let i=0;i<n;i++){const x=W-40;s+=`<rect x="${x-15}" y="${y(i)-14}" width="30" height="28" rx="6" class="meter"/><path d="M${x-9} ${y(i)+6}a9 9 0 0 1 18 0" class="arc"/><line x1="${x}" y1="${y(i)+6}" x2="${x+6}" y2="${y(i)-6}" class="arc"/>`}
+  return `<svg viewBox="0 0 ${W} ${H}" style="max-width:${Math.round(W*1.3)}px" role="img" aria-label="Circuit: ${p.gates.join(', ')}">${s}</svg>`;}
+function overlap(p){
+  const th=Math.acos(Math.sqrt(p.fid)),a0=62*Math.PI/180,L=110,O=[24,126];
+  const pt=a=>[O[0]+L*Math.cos(a),O[1]-L*Math.sin(a)],S=pt(a0),C=pt(a0-th),r=42,A1=[O[0]+r*Math.cos(a0),O[1]-r*Math.sin(a0)],A2=[O[0]+r*Math.cos(a0-th),O[1]-r*Math.sin(a0-th)];
+  const same=th<.01,deg=(th*180/Math.PI).toFixed(1);
+  return `<svg viewBox="0 0 220 140" role="img" aria-label="Angle between claimed and simulated states: ${deg} degrees">
+   <line x1="${O[0]}" y1="${O[1]}" x2="210" y2="${O[1]}" class="ax"/><line x1="${O[0]}" y1="${O[1]}" x2="${O[0]}" y2="6" class="ax"/>
+   ${same?'':`<path d="M${O[0]} ${O[1]}L${A1[0]} ${A1[1]}A${r} ${r} 0 0 1 ${A2[0]} ${A2[1]}Z" class="ang"/>`}
+   <line x1="${O[0]}" y1="${O[1]}" x2="${S[0]}" y2="${S[1]}" class="vs"/>
+   <line x1="${O[0]}" y1="${O[1]}" x2="${C[0]}" y2="${C[1]}" class="vc ${same?'':'off'}"/>
+   ${same?`<text x="${S[0]+8}" y="${S[1]+4}">|claim⟩ = |sim⟩</text>`:`<text x="${S[0]-44}" y="${S[1]+6}">|sim⟩</text><text x="${C[0]+8}" y="${C[1]+6}">|claim⟩</text><text x="${O[0]+r+14}" y="${O[1]-10}" style="fill:var(--fail);font-style:normal;font-size:13px">θ ${deg}°</text>`}</svg>`;}
+function picture(p){
+  if(p.sim)return `<div class="panel"><h3>Amplitudes by basis state</h3><p class="sub">Filled area is the simulated probability. The dashed ring is what the author claims.</p>
+   <div class="disks">${disks(p)}</div>
+   <div class="legend"><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--amp)"/></svg>Simulated</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--ink)" stroke-dasharray="3 2"/></svg>Claimed</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--fail)" stroke-width="2" stroke-dasharray="3 2"/></svg>Outside ±${p.tol} tolerance</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--amp)"/><line x1="8" y1="8" x2="8" y2="2" stroke="var(--on)" stroke-width="2"/></svg>Phase</span></div>
+   <div class="circ">${circuit(p)}</div></div>`;
+  if(p.missing)return `<div class="panel"><h3>Missing from the proposal</h3><p class="sub">Verification needs all three before it can simulate anything.</p><ul class="missing">${p.missing.map(([s,a,b])=>`<li><span class="ket">${s}</span><div><b>${a}</b><span>${b}</span></div></li>`).join('')}</ul></div>`;
+  return `<div class="panel"><h3>Circuit as submitted</h3><p class="sub">Structural check failed, so the circuit wasn’t simulated.</p><div class="circ">${circuit(p)}</div></div>`;}
+function side(p){
+  const c=k=>p.checks.filter(x=>x[2]===k).length,pass=c('pass'),fail=c('fail'),not=c('not'),hold=p.checks.length-pass-fail-not;
+  const rest=[fail&&`${fail} failed`,hold&&`${hold} inconclusive`,not&&`${not} not run`].filter(Boolean).join(', ');
+  const ov=p.sim?`<div class="panel ov"><h3>State overlap</h3><div class="big ${p.fid<1?'fail':''}">${p.fid.toFixed(3)}</div><span class="math">fidelity |⟨claim|sim⟩|²</span>${overlap(p)}
+    <p class="hint">${p.fid<1?'The claimed state points away from what the circuit produces.':'The claimed state and the simulated state are identical.'}</p></div>`:'';
+  return `<div class="side">${ov}<div class="panel">
+    <div class="fg"><span>Total variation distance</span><b class="${p.sim&&p.tvd>p.tol?'fail':''}">${p.sim?p.tvd.toFixed(3)+' / '+p.tol:'Not simulated'}</b></div>
+    <div class="fg"><span>Checks passed</span><b>${pass} of ${p.checks.length}</b></div>
+    ${rest?`<div class="fg"><span>Other checks</span><b style="font-weight:400">${rest}</b></div>`:''}
+    <div class="fg"><span>Qubits</span><b>${p.n??'Not stated'}</b></div></div></div>`;}
+function populated(){
+  const p=Q.find(x=>x.id===sel);if(!p)return blank();
+  if(p.state==='run')return loading(p);
+  if(p.state==='bad')return errorView(p);
+  const [c,t,k]=V[p.v],[act]=DEC[p.v];
+  const comp=compose===p.id?`<form class="compose" id="cf" novalidate>
+    <label for="msg">${p.v==='fail'?'What should the author fix?':'What does the author need to add?'}</label>
+    <textarea id="msg" aria-describedby="msgh" ${err?'aria-invalid="true"':''} placeholder="${p.v==='fail'?'e.g. H then CNOT gives 50/50 on 00 and 11. Revise the expected distribution or the circuit.':'e.g. State the register size, the gate sequence and the expected outcome probabilities.'}">${esc(p.draft||'')}</textarea>
+    ${err?`<p class="err" id="msgh">${err}</p>`:`<p class="hint" id="msgh">The check log goes with your note.</p>`}
+    <div class="row"><button class="btn primary ${c}" type="submit">${act}</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>`:'';
+  const actions=p.dec?`<div class="act"><span class="hint">${DEC[p.v][1]}.</span><button class="btn" id="reopen">Reopen</button></div>`
+   :compose===p.id?'<div style="height:22px"></div>':`<div class="act"><button class="btn primary ${c}" id="go" ${p.busy?'disabled':''}>${p.busy?'Sending…':act}</button>
+    <details class="more"><summary class="btn">More</summary><div class="menu"><button id="copy">Copy report JSON</button><button id="rerun">Re-run verification</button></div></details></div>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span><span>Verified ${p.when||'today, 09:42'}</span></div>
+  <div class="tag ${c}"><span class="ket">${k}</span>${t}</div><h2>${esc(p.head)}</h2></section>
+  <section class="board">${picture(p)}${side(p)}</section>${actions}${comp}
+  <details class="sec" open><summary>Check log (${p.checks.length})</summary><table class="stack"><thead><tr><th>Check</th><th>Result</th><th>Evidence</th></tr></thead><tbody>
+  ${p.checks.map(([id,n,s,d])=>`<tr><td>${n}<div class="cid">${id}</div></td><td class="nw"><span class="st ${CS[s][0]}">${CS[s][1]}</span></td><td>${d}</td></tr>`).join('')}</tbody></table></details>
+  <details class="sec"><summary>Literature (${p.cites.length})</summary>${p.cites.length?p.cites.map(([s,st,t])=>`<div class="cite"><span class="st ${st==='Supports'?'pass':'fail'}">${st}</span> ${s}<p>${t}</p></div>`).join(''):'<p class="hint" style="padding-bottom:16px">Not checked. Literature review runs after the circuit passes structural checks.</p>'}</details>
+  <p class="note">Sample data from the project’s benchmark cases. A pass covers ideal statevector simulation only; expert review is still required before running on hardware.</p>`;}
+function loading(p){
+  const i=p.step||0,shell=`<svg viewBox="0 0 80 80" style="width:100%;max-width:96px"><circle cx="40" cy="40" r="34" fill="var(--ampsoft)" stroke="var(--rule)"/></svg>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span></div>
+  <div class="tag run"><span class="ket">|ψ⟩</span>Verifying</div><div class="sk pulse" style="height:34px;max-width:560px;margin-bottom:10px"></div><div class="sk pulse" style="height:34px;max-width:360px"></div></section>
+  <section class="board"><div class="panel"><h3>Amplitudes by basis state</h3><p class="sub">Appear once the circuit is simulated.</p>
+   <div class="disks">${[0,1,2,3].map(j=>`<div class="pulse" style="animation-delay:${j*.2}s">${shell}</div>`).join('')}</div></div>
+   <div class="panel"><ol class="steps" aria-label="Verification progress">${STEPS.map((s,j)=>`<li class="${j<i?'ok':j===i?'on':''}">${s}${j===i?'…':''}</li>`).join('')}</ol>
+   <p class="hint" style="margin-top:18px">Usually about 5 seconds. You can review other proposals meanwhile.</p></div></section>`;}
+function errorView(p){
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span></div>
+  <div class="tag fail"><span class="ket">|∅⟩</span>Not verified</div><h2>Couldn’t read ${esc(p.file)}</h2></section>
+  <div class="panel" style="max-width:640px"><p style="margin-top:0">${esc(p.why)}</p>
+  <div class="row"><label class="btn primary" for="file">Upload another file</label><button class="btn" id="drop">Remove from queue</button></div></div>`;}
+function blank(){
+  return `<div class="blank">${bloch}<div><h2>No proposals waiting for review</h2><p>Upload a proposal as PDF, DOCX or plain text. The circuit is extracted, simulated and audited in about 5 seconds.</p>
+  <div class="row"><label class="btn primary" for="file">Upload proposal</label><button class="btn" id="samples">Load sample proposals</button></div></div></div>`;}
+function render(){renderQ();$('#main').innerHTML=Q.length?populated():blank();
+  document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===view));}
+
+function toast(msg,undo){$('#tmsg').textContent=msg;$('#undo').hidden=!undo;last=undo;$('#toast').hidden=false;
+  clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').hidden=true,5000);}
+function verify(p,result){
+  p.state='run';p.step=0;sel=p.id;render();
+  const tick=()=>{if(p.step<STEPS.length-1){p.step++;if(sel===p.id)render();else renderQ();p.t=setTimeout(tick,650)}
+    else{Object.assign(p,result,{state:null,when:'just now'});render();toast(`Verified ${p.file}`)}};
+  p.t=setTimeout(tick,650);}
+function upload(name){
+  const ext=(name.split('.').pop()||'').toLowerCase(),id='P-0'+(next++);
+  const p={id,file:name,title:name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ')};
+  Q.unshift(p);compose=null;
+  if(!['pdf','docx','txt'].includes(ext)||/scan/i.test(name)){
+    p.state='bad';p.why=/scan/i.test(name)?'The PDF has no text layer, so the qubit count, circuit and expected outcomes can’t be extracted. Upload a DOCX or a text-based PDF.':`.${ext||'unknown'} files aren’t supported. Upload a PDF, DOCX or TXT file.`;
+    sel=id;render();return;}
+  const base=JSON.parse(JSON.stringify(SAMPLES[/ghz/i.test(name)?4:1]));delete base.id;delete base.file;delete base.title;
+  verify(p,base);}
+function setView(s){view=s;Q.forEach(p=>clearTimeout(p.t));compose=null;err='';
+  if(s==='empty'){Q=[];sel=null;render()}
+  else{Q=JSON.parse(JSON.stringify(SAMPLES));sel=Q[0].id;
+    if(s==='loading')upload('ghz_three_qubit_v2.docx');
+    else if(s==='error')upload('cryo_lab_proposal_scan.pdf');
+    else render();}}
+function pick(id){sel=id;compose=null;err='';render();}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  const p=Q.find(x=>x.id===sel);
+  if(t.dataset.s){setView(t.dataset.s);return}
+  if(t.dataset.id){pick(t.dataset.id);return}
+  switch(t.id){
+    case 'samples':setView('populated');break;
+    case 'go':
+      if(p.v==='pass'){p.busy=true;render();setTimeout(()=>{p.busy=false;p.dec=true;render();toast('Sent to panel',()=>{p.dec=false;render()})},600)}
+      else{compose=p.id;err='';render();$('#msg').focus()}break;
+    case 'cancel':compose=null;err='';render();break;
+    case 'reopen':p.dec=false;render();break;
+    case 'rerun':{const r=JSON.parse(JSON.stringify(p));verify(p,{checks:r.checks,v:r.v,head:r.head});break}
+    case 'copy':{const {state,t:_,busy,draft,...rep}=p;
+      Promise.resolve().then(()=>navigator.clipboard.writeText(JSON.stringify(rep,null,2))).then(()=>toast('Report copied'),()=>toast('Couldn’t copy: the browser blocked clipboard access'));
+      t.closest('details').open=false;break}
+    case 'drop':Q=Q.filter(x=>x!==p);sel=Q[0]?.id;render();break;
+    case 'undo':$('#toast').hidden=true;last&&last();break;}
+});
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,textarea')||e.metaKey||e.ctrlKey||!Q.length)return;
+  const k=e.key.toLowerCase();if(k!=='j'&&k!=='k')return;
+  const i=Q.findIndex(x=>x.id===sel),n=Math.min(Q.length-1,Math.max(0,i+(k==='j'?1:-1)));
+  if(n!==i){pick(Q[n].id);document.querySelector(`[data-id="${Q[n].id}"]`)?.focus()}});
+document.addEventListener('input',e=>{if(e.target.id==='msg'){const p=Q.find(x=>x.id===sel);p.draft=e.target.value;
+  if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
+document.addEventListener('submit',e=>{e.preventDefault();const p=Q.find(x=>x.id===sel),v=(p.draft||'').trim();
+  if(v.length<20){err=v?`Add ${20-v.length} more characters so the author knows what to change.`:'Add a note so the author knows what to change.';render();$('#msg').focus();return}
+  compose=null;err='';p.dec=true;render();toast(DEC[p.v][1],()=>{p.dec=false;render()});});
+$('#file').addEventListener('change',e=>{const f=e.target.files[0];if(f){view='populated';upload(f.name)}e.target.value='';});
+setView('populated');
+}
+</script>
+</body>
+</html>

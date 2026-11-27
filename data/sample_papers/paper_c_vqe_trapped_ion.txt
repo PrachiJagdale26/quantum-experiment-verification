@@ -1,0 +1,25 @@
+A Hardware-Efficient VQE Ansatz for Molecular Hydrogen on Trapped Ions
+
+SYNTHETIC SAMPLE PAPER: written to demonstrate the research-gap pipeline. Not a real publication.
+
+Abstract
+We introduce a hardware-efficient Variational Quantum Eigensolver (VQE) ansatz and use it to estimate the ground-state energy of molecular hydrogen on a trapped ion processor. The reference state is prepared with single-qubit flips followed by an entangling layer.
+
+Methodology
+A two-ion chain encodes the minimal H2 Hamiltonian in the parity mapping. The classical optimiser is COBYLA, and the VQE loop is orchestrated with Qiskit.
+
+Experiment 1: Reference-state preparation on a 2-qubit register
+The Hartree-Fock reference is prepared on 2 qubits. X gate on qubit 0, then CX gate on qubits 0, 1.
+We measured P(11) = 1.0 for the reference state before the variational layer.
+
+Results
+We achieved chemical accuracy (error below 1.6 mHa) at the equilibrium bond length. Our main contribution is an ansatz with half the two-qubit gate count of the unitary coupled-cluster baseline.
+
+Limitations
+All runs are restricted to trapped ion hardware with all-to-all connectivity. The ansatz does not account for limited connectivity on nearest-neighbour architectures.
+
+Future Work
+Benchmarking the same VQE ansatz on neutral atom arrays and superconducting transmon devices will be explored in future work.
+
+References
+[1] Peruzzo et al., A variational eigenvalue solver on a photonic quantum processor.

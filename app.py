@@ -56,26 +56,33 @@ st.set_page_config(
 # Custom CSS for scientific styling
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0.2rem;
-    }
-    .sub-header {
-        font-size: 1.1rem;
-        color: #4B5563;
-        margin-bottom: 1.5rem;
-    }
-    .metric-card {
-        background-color: #F8FAFC;
-        border-radius: 8px;
-        padding: 1rem;
-        border: 1px solid #E2E8F0;
-    }
-    .stAlert {
-        border-radius: 8px;
-    }
+    /* Overlap design system: colours and fonts come from .streamlit/config.toml; this adds shape and rhythm. */
+    [data-testid="stDecoration"] {display: none;}
+    .main-header {font-size: clamp(26px, 3vw, 36px); font-weight: 400; letter-spacing: -.01em; line-height: 1.15; margin: 4px 0 8px;}
+    .sub-header {font-size: 1rem; opacity: .72; max-width: 72ch; margin-bottom: 1.4rem;}
+    .metric-card {border-radius: 20px; padding: 1rem 1.2rem; border: 1px solid color-mix(in srgb, currentColor 14%, transparent);}
+    .stAlert, [data-testid="stAlertContainer"] {border-radius: 14px;}
+    /* Tabs: quiet underline like Overlap's */
+    [data-baseweb="tab-list"] {gap: 2px; border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);}
+    [data-baseweb="tab"] {padding: 10px 14px; font-size: 14px;}
+    [data-baseweb="tab-highlight"] {height: 2px;}
+    [data-baseweb="tab-border"] {display: none;}
+    /* Panels */
+    [data-testid="stMetric"] {border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 20px; padding: 14px 18px;}
+    [data-testid="stMetricValue"] {font-weight: 300; letter-spacing: -.02em;}
+    [data-testid="stExpander"] details {border-radius: 16px;}
+    [data-testid="stFileUploaderDropzone"] {border-radius: 16px;}
+    hr {opacity: .5;}
+    .stButton button[kind="primary"] {font-weight: 500;}
+    /* Sidebar brand */
+    .ov-brand {display: flex; align-items: center; gap: 10px; margin: 4px 0 8px;}
+    .ov-brand svg {width: 36px; height: 36px; flex: none;}
+    .ov-brand .sph {fill: color-mix(in srgb, currentColor 10%, transparent); stroke: color-mix(in srgb, currentColor 25%, transparent);}
+    .ov-brand .eq {fill: none; stroke: color-mix(in srgb, currentColor 45%, transparent); stroke-dasharray: 3 4;}
+    .ov-brand .vec {stroke: currentColor; stroke-width: 3; stroke-linecap: round;}
+    .ov-brand .tip {fill: currentColor;}
+    .ov-brand b {display: block; font-size: 18px; font-weight: 500; line-height: 1.1;}
+    .ov-brand span {font-size: 13px; opacity: .7;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,9 +121,7 @@ if "agentic_state" not in st.session_state:
 # Sidebar: System Controls & API Key Detection
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/atom.png", width=64)
-    st.title("Quantum Verifier")
-    st.caption("AI-Driven Research Prototype v1.1")
+    st.caption("Settings and status")
 
     st.markdown("---")
     st.subheader("LLM Provider Status")
@@ -136,45 +141,45 @@ with st.sidebar:
     else:
         provider_display = temp_client.provider_name.upper()
 
-    st.write(f"🏢 **Provider**: `{provider_display}`")
-    st.write(f"🤖 **Model**: `{temp_client.model_name}`")
+    st.write(f"**Provider**: `{provider_display}`")
+    st.write(f"**Model**: `{temp_client.model_name}`")
 
     if temp_client.provider_name == "vertex":
         if temp_client.vertex_project:
-            st.caption(f"📁 **Project ID**: `{temp_client.vertex_project}`")
+            st.caption(f"**Project ID**: `{temp_client.vertex_project}`")
         if temp_client.vertex_location:
-            st.caption(f"🌐 **Location**: `{temp_client.vertex_location}`")
+            st.caption(f"**Location**: `{temp_client.vertex_location}`")
         if temp_client.service_account_email:
-            st.caption(f"🔑 **Service Account**: `{temp_client.service_account_email}`")
+            st.caption(f"**Service Account**: `{temp_client.service_account_email}`")
         if temp_client.credential_path:
-            st.caption(f"📄 **Credentials**: `{temp_client.credential_path}`")
+            st.caption(f"**Credentials**: `{temp_client.credential_path}`")
 
     if is_live:
-        st.success("🟢 **API Status**: Connected & ADC Configured")
-        st.markdown("**Execution Mode**: 🚀 `Live AI Analysis Active`")
+        st.success("**API Status**: Connected & ADC Configured")
+        st.markdown("**Execution Mode**: `Live AI Analysis Active`")
     else:
-        st.warning("🟡 **API Status**: Not Configured")
-        st.markdown("**Execution Mode**: 🧪 `Demo Mode (Reference Data)`")
+        st.warning("**API Status**: Not Configured")
+        st.markdown("**Execution Mode**: `Demo Mode (Reference Data)`")
 
     # Last connection test display
     last_test = st.session_state.gemini_test_result
     if last_test:
         if last_test.get("success"):
-            st.caption(f"🕒 **Last Test**: {last_test.get('timestamp')} (⏱️ {last_test.get('latency_ms')} ms)")
-            st.caption(f"🔎 {last_test.get('status')}")
+            st.caption(f"**Last Test**: {last_test.get('timestamp')} ({last_test.get('latency_ms')} ms)")
+            st.caption(f"{last_test.get('status')}")
         else:
-            st.caption(f"⚠️ **Last Test Diagnostic**: {last_test.get('status')}")
+            st.caption(f"**Last Test Diagnostic**: {last_test.get('status')}")
     else:
-        st.caption("🕒 **Last Test**: Not tested in current session")
+        st.caption("**Last Test**: Not tested in current session")
 
     # Action button: Test Vertex / Gemini Connection
-    btn_label = "🔌 Test Vertex AI Connection" if temp_client.provider_name == "vertex" else "🔌 Test Gemini Connection"
+    btn_label = "Test Vertex AI Connection" if temp_client.provider_name == "vertex" else "Test Gemini Connection"
     if st.button(btn_label, use_container_width=True):
         with st.spinner(f"Connecting to {provider_display}..."):
             diag = temp_client.test_connectivity()
             st.session_state.gemini_test_result = diag
             if diag.get("success"):
-                st.success(f"✅ Connection Verified ({diag.get('latency_ms')} ms)!\n\n{diag.get('status')}")
+                st.success(f"Connection Verified ({diag.get('latency_ms')} ms)!\n\n{diag.get('status')}")
             else:
                 st.info(f"ℹ️ Provider Diagnostic ({diag.get('latency_ms')} ms):\n\n{diag.get('status')}")
 
@@ -202,9 +207,9 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("Engine Diagnostics")
-    st.write(f"⚛️ **Qiskit Simulator**: {'Available (v2.6.1)' if HAS_QISKIT else 'NumPy Tensor Engine'}")
-    st.write(f"📚 **Literature Passages**: {kb.count()} indexed chunks")
-    st.write(f"📁 **Supported Documents**: PDF (.pdf) & Word (.docx)")
+    st.write(f"**Qiskit Simulator**: {'Available (v2.6.1)' if HAS_QISKIT else 'NumPy Tensor Engine'}")
+    st.write(f"**Literature Passages**: {kb.count()} indexed chunks")
+    st.write(f"**Supported Documents**: PDF (.pdf) & Word (.docx)")
 
     st.markdown("---")
     st.caption("Research prototype. Does not certify physical execution on noisy NISQ hardware.")
@@ -220,23 +225,25 @@ doc_extractor = DocumentExtractor()
 # -----------------------------------------------------------------------------
 # Header
 # -----------------------------------------------------------------------------
-st.markdown('<div class="main-header">⚛️ AI-Based Verification of Quantum Experiment Proposals</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Independent scientific verification combining Generative AI extraction, traceable literature RAG, editable researcher review, and exact Qiskit statevector simulation.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">Verification workbench</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Every tool behind Overlap in one place: enter or edit a proposal, inspect what was extracted, '
+            'simulate it, audit it, trace its evidence, manage the knowledge base, run benchmarks and watch the agent workflow.</div>',
+            unsafe_allow_html=True)
 
 
 # -----------------------------------------------------------------------------
 # Main Navigation Tabs
 # -----------------------------------------------------------------------------
 tab_input, tab_extract, tab_circuit, tab_checklist, tab_evidence, tab_report, tab_kb, tab_eval, tab_agentic = st.tabs([
-    "📝 1. Proposal Input & Review",
-    "🔬 2. Extracted Spec",
-    "⚛️ 3. Quantum Simulation",
-    "📊 4. Verification Engine",
-    "📚 5. Evidence & Citations",
-    "📑 6. Explainable Report",
-    "🗂️ 7. Knowledge Base",
-    "🧪 8. Benchmark Evaluation",
-    "🤖 9. Agentic Verification"
+    "1. Proposal Input & Review",
+    "2. Extracted Spec",
+    "3. Quantum Simulation",
+    "4. Verification Engine",
+    "5. Evidence & Citations",
+    "6. Explainable Report",
+    "7. Knowledge Base",
+    "8. Benchmark Evaluation",
+    "9. Agentic Verification"
 ])
 
 
@@ -249,8 +256,8 @@ with tab_input:
     input_mode_radio = st.radio(
         "Choose Proposal Ingestion Method:",
         [
-            "📄 Mode 1: Upload Existing Research Proposal (PDF / DOCX)",
-            "✍️ Mode 2: Manual Structured Input (Form & Demonstration Presets)"
+            "Mode 1: Upload Existing Research Proposal (PDF / DOCX)",
+            "Mode 2: Manual Structured Input (Form & Demonstration Presets)"
         ],
         index=0 if st.session_state.input_mode == "upload" else 1,
         horizontal=True
@@ -263,7 +270,7 @@ with tab_input:
     # -------------------------------------------------------------------------
     if is_upload_mode:
         st.session_state.input_mode = "upload"
-        st.markdown("#### 📄 Upload Research Proposal Document (PDF or Word DOCX)")
+        st.markdown("#### Upload Research Proposal Document (PDF or Word DOCX)")
         st.caption(
             "Upload an experimental proposal or paper draft. The system extracts text, sections, methodology, "
             "hypothesis, quantum system, qubit count, initial state, gate operations, measurement basis, expected outcomes "
@@ -277,10 +284,10 @@ with tab_input:
         )
 
         # Quick sample proposal file buttons
-        with st.expander("📁 Or load a verified sample proposal file (1-Click Test):"):
+        with st.expander("Or load a verified sample proposal file (1-Click Test):"):
             sc1, sc2, sc3, sc4 = st.columns(4)
             with sc1:
-                if st.button("📄 Sample Bell State (DOCX)", use_container_width=True):
+                if st.button("Sample Bell State (DOCX)", use_container_width=True):
                     sample_path = "data/sample_proposals/sample_bell_state_proposal.docx"
                     if os.path.exists(sample_path):
                         with open(sample_path, "rb") as f:
@@ -294,7 +301,7 @@ with tab_input:
                             st.rerun()
 
             with sc2:
-                if st.button("📑 Sample Bell State (PDF)", use_container_width=True):
+                if st.button("Sample Bell State (PDF)", use_container_width=True):
                     sample_path = "data/sample_proposals/sample_bell_state_proposal.pdf"
                     if os.path.exists(sample_path):
                         with open(sample_path, "rb") as f:
@@ -308,7 +315,7 @@ with tab_input:
                             st.rerun()
 
             with sc3:
-                if st.button("⚠️ Sample Incomplete Proposal (DOCX)", use_container_width=True):
+                if st.button("Sample Incomplete Proposal (DOCX)", use_container_width=True):
                     sample_path = "data/sample_proposals/sample_incomplete_proposal.docx"
                     if os.path.exists(sample_path):
                         with open(sample_path, "rb") as f:
@@ -322,7 +329,7 @@ with tab_input:
                             st.rerun()
 
             with sc4:
-                if st.button("🔬 Sample Nature Paper (s42256)", use_container_width=True):
+                if st.button("Sample Nature Paper (s42256)", use_container_width=True):
                     sample_pdf_path = "data/sample_proposals/s42256-025-01153-0.pdf"
                     if os.path.exists(sample_pdf_path):
                         with open(sample_pdf_path, "rb") as f:
@@ -372,9 +379,9 @@ with tab_input:
         if uploaded_file is not None:
             col_fi1, col_fi2 = st.columns([3, 1])
             with col_fi1:
-                st.write(f"📁 Selected File: **{uploaded_file.name}** ({round(len(uploaded_file.getvalue()) / 1024, 1)} KB)")
+                st.write(f"Selected File: **{uploaded_file.name}** ({round(len(uploaded_file.getvalue()) / 1024, 1)} KB)")
             with col_fi2:
-                extract_file_btn = st.button("📥 Parse & Extract with AI", type="primary", use_container_width=True)
+                extract_file_btn = st.button("Parse & Extract with AI", type="primary", use_container_width=True)
 
             if extract_file_btn:
                 with st.spinner(f"Extracting structured sections and quantum parameters from '{uploaded_file.name}'..."):
@@ -412,14 +419,14 @@ with tab_input:
                         st.error(f"Failed to process document: {e}")
 
         if st.session_state.get("last_extraction_error"):
-            st.error(f"❌ **Extraction Error**: {st.session_state.last_extraction_error}")
+            st.error(f"**Extraction Error**: {st.session_state.last_extraction_error}")
             col_err1, col_err2 = st.columns(2)
             with col_err1:
-                if st.button("🔄 Retry Extraction", key="btn_retry_extract_tab1", use_container_width=True):
+                if st.button("Retry Extraction", key="btn_retry_extract_tab1", use_container_width=True):
                     st.session_state.last_extraction_error = None
                     st.rerun()
             with col_err2:
-                if st.button("✍️ Switch to Manual Input Mode", key="btn_switch_manual_tab1", use_container_width=True):
+                if st.button("Switch to Manual Input Mode", key="btn_switch_manual_tab1", use_container_width=True):
                     st.session_state.input_mode = "manual"
                     st.session_state.last_extraction_error = None
                     st.rerun()
@@ -429,7 +436,7 @@ with tab_input:
     # -------------------------------------------------------------------------
     else:
         st.session_state.input_mode = "manual"
-        st.markdown("#### ✍️ Manual Structured Input Form")
+        st.markdown("#### Manual Structured Input Form")
         st.caption(
             "Specify the quantum experiment hypothesis, target quantum system, initial quantum state, "
             "gate sequence, measurement basis, expected outcomes and assumptions directly."
@@ -544,7 +551,7 @@ with tab_input:
 
             man_assump = st.text_input("Assumptions & Constraints", value=p_assumptions)
 
-            prepare_spec_btn = st.form_submit_button("📋 Prepare Specification for Review", type="primary")
+            prepare_spec_btn = st.form_submit_button("Prepare Specification for Review", type="primary")
 
         if prepare_spec_btn:
             # Parse gate sequence
@@ -617,7 +624,7 @@ with tab_input:
 
     if pending is not None:
         st.markdown("---")
-        st.subheader("Step 2: 📋 Researcher Review & Editable Confirmation Screen")
+        st.subheader("Step 2: Researcher Review & Editable Confirmation Screen")
         st.info(
             "**Researcher confirmation required**: Review and adjust the extracted/specified parameters below. "
             "Verification simulation will ONLY execute once you confirm this specification."
@@ -626,33 +633,33 @@ with tab_input:
         # Source Provenance Badge
         if pending.input_mode == "upload" and pending.source_filename:
             st.success(
-                f"📄 **Input Source**: Uploaded Document `{pending.source_filename}` "
+                f"**Input Source**: Uploaded Document `{pending.source_filename}` "
                 f"({len(pending.source_pages)} page(s) preserved with traceable provenance)"
             )
             # Expander for original document inspection
             if st.session_state.uploaded_doc:
                 udoc = st.session_state.uploaded_doc
-                with st.expander("🔍 Inspect Preserved Original Document Text & Page References"):
+                with st.expander("Inspect Preserved Original Document Text & Page References"):
                     st.write(f"Total Character Count: **{len(udoc.full_text)}** | Identified Sections: **{', '.join(udoc.sections.keys())}**")
                     for p in udoc.pages:
                         st.markdown(f"**--- Page {p['page_number']} ---**")
                         st.text(p["text"][:800] + ("..." if len(p["text"]) > 800 else ""))
         else:
-            st.info("✍️ **Input Source**: Manual Structured Input")
+            st.info("**Input Source**: Manual Structured Input")
 
         # Document Type Badge & Research Paper Guidance
         if pending.document_type == "research_paper":
             st.warning(
-                f"📄 **Document Classified as Academic Research Paper** (DOI: `{pending.doi or 'Identified in Document'}`)\n\n"
+                f"**Document Classified as Academic Research Paper** (DOI: `{pending.doi or 'Identified in Document'}`)\n\n"
                 "This publication discusses broad methodology, theoretical frameworks, and experimental findings. "
                 "Research papers are not automatically treated as single executable proposals.\n\n"
-                "👉 **Options**:\n"
+                "**Options**:\n"
                 "- Select an individual experiment record from the paper below to populate this verification form.\n"
                 "- Or supply/confirm the exact qubit count and gate sequence you wish to test with Qiskit.\n"
                 "- You can also inspect the full **Research Paper Analysis** in Tab 2."
             )
             if st.session_state.current_paper_analysis and st.session_state.current_paper_analysis.experiments:
-                st.markdown("##### 🔬 Select an Experiment from this Paper to Send to Circuit Verification:")
+                st.markdown("##### Select an Experiment from this Paper to Send to Circuit Verification:")
                 paper_exps = st.session_state.current_paper_analysis.experiments
                 for p_idx, p_exp in enumerate(paper_exps):
                     col_pe1, col_pe2 = st.columns([3, 1])
@@ -679,16 +686,16 @@ with tab_input:
 
         if pending.num_qubits is None:
             st.info(
-                "💡 **Qubit Count Unspecified / Inconclusive**: Target system size was not explicitly declared or was ambiguous. "
+                "**Qubit Count Unspecified / Inconclusive**: Target system size was not explicitly declared or was ambiguous. "
                 "Please enter the number of qubits (1-10) below to enable Qiskit simulation."
             )
 
         # Missing / Ambiguous Information Alerts
         if pending.missing_information:
-            st.warning("⚠️ **Missing or Ambiguous Information Detected**:\n" + "\n".join(f"- {m}" for m in pending.missing_information))
+            st.warning("**Missing or Ambiguous Information Detected**:\n" + "\n".join(f"- {m}" for m in pending.missing_information))
 
         if pending.potential_inconsistencies:
-            st.error("🚨 **Potential Inconsistencies Detected**:\n" + "\n".join(f"- {pi}" for pi in pending.potential_inconsistencies))
+            st.error("**Potential Inconsistencies Detected**:\n" + "\n".join(f"- {pi}" for pi in pending.potential_inconsistencies))
 
         if pending.extraction_warnings:
             st.caption("ℹ️ Extraction Warnings / Diagnostics:\n" + "\n".join(f"- {w}" for w in pending.extraction_warnings))
@@ -747,7 +754,7 @@ with tab_input:
 
             col_btn1, col_btn2 = st.columns([3, 1])
             with col_btn1:
-                confirm_btn = st.form_submit_button("✅ Confirm Specification & Run Verification Engine", type="primary", use_container_width=True)
+                confirm_btn = st.form_submit_button("Confirm Specification & Run Verification Engine", type="primary", use_container_width=True)
             with col_btn2:
                 st.caption("Validates fields and executes Qiskit statevector simulation.")
 
@@ -818,11 +825,11 @@ with tab_input:
                 st.session_state.current_proposal = confirmed_spec
                 st.session_state.current_report = verification_report
 
-                st.success("✅ Specification confirmed and verified! Inspect tabs 2 through 6 for simulation, audit checklist, and report export.")
+                st.success("Specification confirmed and verified! Inspect tabs 2 through 6 for simulation, audit checklist, and report export.")
                 st.rerun()
 
         # Reset button
-        if st.button("🔄 Reset / Ingest Different Proposal"):
+        if st.button("Reset / Ingest Different Proposal"):
             st.session_state.pending_proposal = None
             st.session_state.current_proposal = None
             st.session_state.current_report = None
@@ -845,24 +852,24 @@ with tab_extract:
     active_spec: Optional[ProposalSpecification] = proposal or st.session_state.pending_proposal
     paper_data: Optional[ResearchPaperAnalysis] = st.session_state.current_paper_analysis
 
-    spec_view_mode = "🔬 Academic Research Paper Analysis"
+    spec_view_mode = "Academic Research Paper Analysis"
     if paper_data:
         spec_view_mode = st.radio(
             "Select Representation View:",
-            ["🔬 Academic Research Paper Analysis", "📋 Structured Proposal Specification"],
+            ["Academic Research Paper Analysis", "Structured Proposal Specification"],
             horizontal=True
         )
         if "Research Paper" in spec_view_mode:
             render_research_paper_view(paper_data)
             st.markdown("---")
-            with st.expander("📄 Raw Research Paper Analysis JSON"):
+            with st.expander("Raw Research Paper Analysis JSON"):
                 st.json(paper_data.model_dump())
 
     if not paper_data or (paper_data and "Proposal" in spec_view_mode):
         if active_spec is not None:
             # Status header
-            c_status_str = "🟢 Confirmed by Researcher" if active_spec.confirmed_by_researcher else "🟡 Pending Researcher Confirmation"
-            src_label = f"📄 Uploaded Document ({active_spec.source_filename or 'Document'})" if active_spec.input_mode == "upload" else "✍️ Manual Structured Input"
+            c_status_str = "Confirmed by Researcher" if active_spec.confirmed_by_researcher else "Pending Researcher Confirmation"
+            src_label = f"Uploaded Document ({active_spec.source_filename or 'Document'})" if active_spec.input_mode == "upload" else "Manual Structured Input"
             doc_type_str = "Academic Research Paper" if active_spec.document_type == "research_paper" else "Experiment Proposal"
             st.markdown(f"**Verification State**: {c_status_str} | **Input Source**: {src_label} | **Document Type**: `{doc_type_str}`")
 
@@ -898,14 +905,14 @@ with tab_extract:
                 st.dataframe(pd.DataFrame(claims_rows), use_container_width=True, hide_index=True)
 
             if active_spec.missing_information:
-                st.warning("⚠️ **Identified Missing Information**:\n" + "\n".join([f"- {m}" for m in active_spec.missing_information]))
+                st.warning("**Identified Missing Information**:\n" + "\n".join([f"- {m}" for m in active_spec.missing_information]))
 
             if active_spec.extraction_warnings:
                 st.info("ℹ️ **Extraction Diagnostics / Warnings**:\n" + "\n".join([f"- {w}" for w in active_spec.extraction_warnings]))
 
             # Preserved Document Pages
             if active_spec.source_pages:
-                with st.expander(f"📄 Preserved Source Document Pages ({len(active_spec.source_pages)} pages)"):
+                with st.expander(f"Preserved Source Document Pages ({len(active_spec.source_pages)} pages)"):
                     for p in active_spec.source_pages:
                         st.markdown(f"**Page {p.get('page_number', 1)}** ({p.get('char_count', 0)} characters)")
                         st.text(p.get("text", "")[:1000] + ("..." if len(p.get("text", "")) > 1000 else ""))
@@ -918,10 +925,10 @@ with tab_extract:
             # active_spec is None
             if paper_data and paper_data.experiments:
                 st.info(
-                    "📄 **Academic Research Paper Loaded**: The uploaded document discusses multiple quantum experiments. "
+                    "**Academic Research Paper Loaded**: The uploaded document discusses multiple quantum experiments. "
                     "Select an experiment below or on the Tab 1 confirmation screen to populate a structured proposal specification."
                 )
-                st.markdown("##### 🔬 Available Experiments in this Paper:")
+                st.markdown("##### Available Experiments in this Paper:")
                 for p_idx, p_exp in enumerate(paper_data.experiments):
                     col_pe1, col_pe2 = st.columns([3, 1])
                     with col_pe1:
@@ -956,22 +963,22 @@ with tab_extract:
             else:
                 last_err = st.session_state.get("last_extraction_error")
                 if last_err:
-                    st.error(f"❌ **Extraction Error**: {last_err}")
+                    st.error(f"**Extraction Error**: {last_err}")
                     st.info("You can retry document extraction or enter the experiment parameters manually in Tab 1.")
                     col_re1, col_re2 = st.columns(2)
                     with col_re1:
-                        if st.button("🔄 Retry Extraction", key="btn_retry_tab2", use_container_width=True):
+                        if st.button("Retry Extraction", key="btn_retry_tab2", use_container_width=True):
                             st.session_state.last_extraction_error = None
                             st.rerun()
                     with col_re2:
-                        if st.button("✍️ Go to Manual Input", key="btn_manual_tab2", use_container_width=True):
+                        if st.button("Go to Manual Input", key="btn_manual_tab2", use_container_width=True):
                             st.session_state.input_mode = "manual"
                             st.session_state.last_extraction_error = None
                             st.rerun()
                 else:
                     st.info(
                         "ℹ️ **No Proposal Specification Available**: No experiment proposal has been ingested yet.\n\n"
-                        "👉 **Next Step**: Go to **Tab 1: Proposal Input & Review** to upload a proposal (PDF / DOCX) or enter experimental parameters manually."
+                        "**Next Step**: Go to **Tab 1: Proposal Input & Review** to upload a proposal (PDF / DOCX) or enter experimental parameters manually."
                     )
 
 
@@ -1002,11 +1009,11 @@ with tab_circuit:
 
     elif report and not report.simulation:
         if proposal and proposal.num_qubits is None:
-            st.warning("🟡 **Simulation Bypassed / Inconclusive**")
+            st.warning("**Simulation Bypassed / Inconclusive**")
             st.info(
                 "Target quantum system dimension (number of qubits) was not specified or an executable gate sequence was omitted. "
                 "Qiskit statevector simulation was safely bypassed without crash.\n\n"
-                "💡 **Guidance**: Researchers can specify the number of qubits (1-10) and valid gate operations on the confirmation screen."
+                "**Guidance**: Researchers can specify the number of qubits (1-10) and valid gate operations on the confirmation screen."
             )
         else:
             st.error("Simulation was not executed. Circuit gate errors or missing parameters were detected.")
@@ -1027,21 +1034,21 @@ with tab_checklist:
     if report:
         # Prominent overall status banner
         if report.summary_counts.get("FAIL", 0) > 0:
-            st.error(f"❌ **{report.overall_summary}**")
+            st.error(f"**{report.overall_summary}**")
         elif report.summary_counts.get("INCONCLUSIVE", 0) > 0:
-            st.warning(f"⚠️ **{report.overall_summary}**")
+            st.warning(f"**{report.overall_summary}**")
         else:
-            st.success(f"✅ **{report.overall_summary}**")
+            st.success(f"**{report.overall_summary}**")
 
         col_b1, col_b2, col_b3, col_b4 = st.columns(4)
         with col_b1:
-            st.metric("🟢 PASS", report.summary_counts.get("PASS", 0))
+            st.metric("PASS", report.summary_counts.get("PASS", 0))
         with col_b2:
-            st.metric("🔴 FAIL", report.summary_counts.get("FAIL", 0))
+            st.metric("FAIL", report.summary_counts.get("FAIL", 0))
         with col_b3:
-            st.metric("🟡 INCONCLUSIVE", report.summary_counts.get("INCONCLUSIVE", 0))
+            st.metric("INCONCLUSIVE", report.summary_counts.get("INCONCLUSIVE", 0))
         with col_b4:
-            st.metric("⚪ NOT RUN", report.summary_counts.get("NOT_RUN", 0))
+            st.metric("NOT RUN", report.summary_counts.get("NOT_RUN", 0))
 
         st.markdown("---")
         st.subheader("Audited Verification Rules")
@@ -1062,7 +1069,7 @@ with tab_checklist:
             st.dataframe(pd.DataFrame(claims_data), use_container_width=True, hide_index=True)
 
         st.markdown("---")
-        st.info(f"🛡️ **Hardware Feasibility Disclaimer**: {report.limitations_and_disclaimer}")
+        st.info(f"**Hardware Feasibility Disclaimer**: {report.limitations_and_disclaimer}")
 
     else:
         st.info("Run verification in Tab 1 to generate the audit checklist.")
@@ -1095,7 +1102,7 @@ with tab_report:
         col_d1, col_d2 = st.columns(2)
         with col_d1:
             st.download_button(
-                label="📥 Download JSON Audit Report",
+                label="Download JSON Audit Report",
                 data=json_report,
                 file_name=f"verification_report_{report.report_id}.json",
                 mime="application/json",
@@ -1103,7 +1110,7 @@ with tab_report:
             )
         with col_d2:
             st.download_button(
-                label="📥 Download Markdown Summary Report",
+                label="Download Markdown Summary Report",
                 data=md_report,
                 file_name=f"verification_report_{report.report_id}.md",
                 mime="text/markdown"
@@ -1127,7 +1134,7 @@ with tab_kb:
 
     col_kb1, col_kb2 = st.columns(2)
     with col_kb1:
-        if st.button("🔄 Re-Index Starter Reference Corpus"):
+        if st.button("Re-Index Starter Reference Corpus"):
             added = kb.seed_starter_corpus()
             st.success(f"Indexed {added} authoritative reference passages from Nielsen & Chuang, Bell (1964), Grover (1996), and Preskill (2018).")
 
@@ -1189,7 +1196,7 @@ with tab_eval:
 
             csv_data = eval_df.to_csv(index=False)
             st.download_button(
-                label="📥 Download Benchmark Results (CSV)",
+                label="Download Benchmark Results (CSV)",
                 data=csv_data,
                 file_name="quantum_verification_benchmark_results.csv",
                 mime="text/csv"
@@ -1200,7 +1207,7 @@ with tab_eval:
 # TAB 9: Agentic Verification Dashboard (LangGraph Multi-Agent Architecture)
 # =============================================================================
 with tab_agentic:
-    st.subheader("🤖 LangGraph Agentic Quantum Verification Architecture")
+    st.subheader("LangGraph Agentic Quantum Verification Architecture")
     st.markdown(
         "Autonomous multi-agent orchestration coordinating **Document Analyst**, **Literature Researcher**, "
         "**Quantum Simulation**, **Verification Auditor**, and **Explainability & Reporting** agents. "
@@ -1209,7 +1216,7 @@ with tab_agentic:
 
     # Architectural highlights
     st.info(
-        "🛡️ **Inviolable Scientific Rules**: Computational simulation failures (Qiskit) **cannot** be overridden by "
+        "**Inviolable Scientific Rules**: Computational simulation failures (Qiskit) **cannot** be overridden by "
         "an LLM or literature argument. Missing critical parameters pause the workflow for researcher approval rather than guessing."
     )
 
@@ -1225,7 +1232,7 @@ with tab_agentic:
 
     with col_actions:
         st.markdown("<br>", unsafe_allow_html=True)
-        run_agentic_btn = st.button("🚀 Run Multi-Agent Verification", type="primary", use_container_width=True)
+        run_agentic_btn = st.button("Run Multi-Agent Verification", type="primary", use_container_width=True)
 
     # Setup proposal specification according to selection
     target_spec = None
@@ -1281,7 +1288,7 @@ with tab_agentic:
 
     # Handle Run
     if run_agentic_btn:
-        with st.spinner("🤖 Multi-agent system executing across LangGraph StateGraph..."):
+        with st.spinner("Multi-agent system executing across LangGraph StateGraph..."):
             init_state = create_initial_state(
                 raw_text=target_raw_text,
                 filename=target_filename,
@@ -1308,15 +1315,15 @@ with tab_agentic:
         m1, m2, m3, m4, m5 = st.columns(5)
         with m1:
             if status == "PASS":
-                st.metric("Audit Status", "✅ PASS")
+                st.metric("Audit Status", "PASS")
             elif status == "FAIL":
-                st.metric("Audit Status", "❌ FAIL")
+                st.metric("Audit Status", "FAIL")
             elif requires_review:
-                st.metric("Audit Status", "⏸️ PAUSED")
+                st.metric("Audit Status", "PAUSED")
             else:
-                st.metric("Audit Status", f"🔍 {status}")
+                st.metric("Audit Status", f"{status}")
         with m2:
-            st.metric("Discrepancy Detected", "YES ❌" if discrepancy else "NO ✅")
+            st.metric("Discrepancy Detected", "Yes" if discrepancy else "No")
         with m3:
             st.metric("Total Variation Distance", f"{tvd_val:.4f}" if tvd_val is not None else "N/A")
         with m4:
@@ -1327,21 +1334,21 @@ with tab_agentic:
         # Inviolable rule notification
         if discrepancy or status == "FAIL":
             st.error(
-                "🛡️ **Inviolable Rule Enforced**: Deterministic computational simulation detected a mismatch between author claims "
+                "**Inviolable Rule Enforced**: Deterministic computational simulation detected a mismatch between author claims "
                 "and independent Qiskit calculations. This result **cannot** be overridden by LLM reasoning or literature citations."
             )
 
         # 2. Human-in-the-Loop Review Box
         if requires_review:
-            st.warning(f"⚠️ **Human Review Required**: {agent_state.get('human_review_reason')}")
-            with st.expander("📝 Researcher Parameter Confirmation & Override Form", expanded=True):
+            st.warning(f"**Human Review Required**: {agent_state.get('human_review_reason')}")
+            with st.expander("Researcher Parameter Confirmation & Override Form", expanded=True):
                 st.markdown("Please provide or confirm the missing experiment parameters to resume the verification workflow:")
                 c_title = st.text_input("Experiment Title", value=agent_state.get("proposal_spec").title if agent_state.get("proposal_spec") else "Confirmed Quantum Proposal")
                 c_qubits = st.number_input("Number of Qubits", min_value=1, max_value=10, value=2)
                 c_gates_str = st.text_area("Quantum Circuit Gate Sequence (DSL format: 'H 0', 'CX 0 1')", value="H 0\nCX 0 1", height=100)
                 c_outcomes_str = st.text_input("Expected Probabilities (e.g. '00: 0.5, 11: 0.5')", value="00: 0.5, 11: 0.5")
 
-                if st.button("✅ Confirm Parameters & Resume Multi-Agent Workflow", type="primary"):
+                if st.button("Confirm Parameters & Resume Multi-Agent Workflow", type="primary"):
                     try:
                         parsed_spec = parse_circuit_dsl(c_gates_str, num_qubits=int(c_qubits))
                         # Parse expected outcomes
@@ -1365,13 +1372,13 @@ with tab_agentic:
                         st.error(f"Error parsing confirmation input: {e}")
 
         # 3. Individual Agent Activity Tabs
-        st.markdown("### 🔬 Specialized Agent Output & Traceability")
+        st.markdown("### Specialized Agent Output & Traceability")
         ag_tab_doc, ag_tab_lit, ag_tab_sim, ag_tab_aud, ag_tab_rep = st.tabs([
-            "📄 Document Analyst",
-            "🔍 Literature Researcher",
-            "⚛️ Quantum Simulation",
-            "⚖️ Verification Auditor",
-            "📝 Explainability & Reporting"
+            "Document Analyst",
+            "Literature Researcher",
+            "Quantum Simulation",
+            "Verification Auditor",
+            "Explainability & Reporting"
         ])
 
         with ag_tab_doc:
@@ -1390,7 +1397,7 @@ with tab_agentic:
             if missing:
                 st.warning(f"**Missing Parameters Identified ({len(missing)}):** {', '.join(missing)}")
             else:
-                st.success("✅ All critical parameters successfully identified.")
+                st.success("All critical parameters successfully identified.")
 
         with ag_tab_lit:
             st.markdown("#### Literature Researcher Agent")
@@ -1446,7 +1453,7 @@ with tab_agentic:
             if checks:
                 check_records = []
                 for chk in checks:
-                    status_badge = "✅ PASS" if chk.status == CheckStatus.PASS else ("❌ FAIL" if chk.status == CheckStatus.FAIL else f"⚠️ {chk.status.value}")
+                    status_badge = "PASS" if chk.status == CheckStatus.PASS else ("FAIL" if chk.status == CheckStatus.FAIL else f"{chk.status.value}")
                     check_records.append({
                         "Check ID": chk.check_id,
                         "Name": chk.name,
@@ -1466,7 +1473,7 @@ with tab_agentic:
                 c_d1, c_d2 = st.columns(2)
                 with c_d1:
                     st.download_button(
-                        "📥 Download Agentic Verification Report (Markdown)",
+                        "Download Agentic Verification Report (Markdown)",
                         data=md_rep,
                         file_name=f"agentic_verification_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
                         mime="text/markdown",
@@ -1476,7 +1483,7 @@ with tab_agentic:
                     final_rep = agent_state.get("final_report")
                     if final_rep:
                         st.download_button(
-                            "📥 Download Verification Report (JSON)",
+                            "Download Verification Report (JSON)",
                             data=ReportGenerator.to_json(final_rep),
                             file_name=f"agentic_verification_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                             mime="application/json",
@@ -1485,7 +1492,7 @@ with tab_agentic:
 
         # 4. Live Multi-Agent Execution Trace Log
         st.markdown("---")
-        st.markdown("### 📜 Real-Time Agent Execution Trace Log")
+        st.markdown("### Real-Time Agent Execution Trace Log")
         logs = agent_state.get("agent_logs", [])
         if logs:
             log_records = [{

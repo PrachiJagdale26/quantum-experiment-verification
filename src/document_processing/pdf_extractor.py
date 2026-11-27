@@ -189,6 +189,9 @@ class PDFExtractor:
             "expected_results": r"(?is)\b(expected results|expected outcomes|measurement outcomes|outcomes|results)\b[:\s]*(.*?)(?=\n\s*(assumptions|limitations|discussion|conclusion|references|5\.|\n\n\n))",
             "assumptions": r"(?is)\b(assumptions|constraints|hardware constraints)\b[:\s]*(.*?)(?=\n\s*(limitations|conclusion|references|\n\n\n))",
             "limitations": r"(?is)\b(limitations|threats to validity)\b[:\s]*(.*?)(?=\n\s*(conclusion|references|\n\n\n))",
+            "discussion": r"(?is)\n\s*(?:\d+\.?\s*)?discussion\b[:\s]*(.*?)(?=\n\s*(?:\d+\.?\s*)?(?:limitations|conclusions?|future work|outlook|references|acknowledg)|\Z)",
+            "future_work": r"(?is)\n\s*(?:\d+\.?\s*)?(?:future work|future directions|outlook|open questions)\b[:\s]*(.*?)(?=\n\s*(?:\d+\.?\s*)?(?:conclusions?|references|acknowledg)|\Z)",
+            "conclusion": r"(?is)\n\s*(?:\d+\.?\s*)?(?:conclusions?|concluding remarks)\b[:\s]*(.*?)(?=\n\s*(?:\d+\.?\s*)?(?:future work|outlook|references|acknowledg)|\Z)",
             "references": r"(?is)\b(references|bibliography)\b[:\s]*(.*)$",
         }
 

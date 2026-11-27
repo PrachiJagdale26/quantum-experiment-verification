@@ -12,7 +12,47 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from src.evaluation.evaluator import VerificationEvaluator
 
 
+def run_gaps():
+    """Gap-finding + planning benchmark on the synthetic sample papers (offline, demo mode)."""
+    from src.evaluation.gap_benchmark import run_gap_benchmark
+    from src.knowledge_base.retriever import QuantumRetriever
+    from src.knowledge_base.vector_store import QuantumKnowledgeBase
+    from src.llm.client import ConfigurableLLMClient
+    from src.llm.extractor import ProposalExtractor
+    from src.research import ExperimentPlanner, GapFinder, PaperLibrary, ResearchPipeline
+    from src.verification.engine import VerificationEngine
+
+    llm = ConfigurableLLMClient(demo_mode=True)
+    kb = QuantumKnowledgeBase()
+    kb.seed_starter_corpus()
+    library = PaperLibrary(ProposalExtractor(llm), kb)
+    library.load_samples()
+    pipe = ResearchPipeline(library, GapFinder(llm, kb), ExperimentPlanner(llm),
+                            VerificationEngine(retriever=QuantumRetriever(kb), llm_client=llm))
+    m = run_gap_benchmark(pipe)
+
+    print("=" * 80)
+    print("RESEARCH-GAP IDENTIFICATION & EXPERIMENT PLANNING BENCHMARK (synthetic papers)")
+    print("=" * 80)
+    print(f"Papers analysed            : {m['papers']}")
+    print(f"Gaps found                 : {m['gaps_found']}")
+    print(f"Planted-gap recall         : {m['planted_recall']:.2f}  ({m['planted_gaps']} planted)")
+    print(f"Precision (lower bound)    : {m['precision_lower_bound']:.2f}")
+    print(f"Gaps with quoted evidence  : {m['evidence_coverage']:.2f}")
+    print(f"Plans verified first time  : {m['plans_first_pass_rate']:.2f}")
+    print(f"Plans verified after 1 fix : {m['plans_pass_after_revision_rate']:.2f}")
+    print("\nPlanted gap -> matching found gaps")
+    for gid, ids in m["matches"].items():
+        print(f"  {gid}: {', '.join(ids) if ids else 'NOT FOUND'}")
+    print("\nTop gaps")
+    for g in pipe.gaps[:5]:
+        print(f"  {g.gap_id} [{g.gap_type}] priority {g.priority:.2f}  {g.title}")
+
+
 def main():
+    if "--gaps" in sys.argv:
+        run_gaps()
+        return
     print("=" * 80)
     print("AI-BASED VERIFICATION OF QUANTUM EXPERIMENT PROPOSALS - BENCHMARK EVALUATION")
     print("=" * 80)

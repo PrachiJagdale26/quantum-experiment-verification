@@ -36,6 +36,118 @@ WORD_TO_NUM = {
 }
 
 
+_SIGNAL_CUES = {
+    # Order matters: a sentence is filed under the first gap category it matches.
+    "future_work": r"\b(future work|in future|future research|future studies|we plan to|we intend to|left (?:for|to) future|leave .{0,60}? (?:for|to) future|further work|next step|will be (?:explored|investigated|addressed))\b",
+    "open_questions": r"\b(remains? (?:an )?open|open (?:question|problem)|unresolved|(?:it is )?unclear (?:whether|how|if)|(?:it is )?(?:not|un)known (?:whether|how|if)|has not (?:yet )?been (?:tested|demonstrated|studied|explored|shown))\b",
+    "limitations": (r"\b(limited to|limitations? (?:of|is|are|include)|(?:is|are|was|were) restricted to|restricted to|"
+                    r"only (?:up to|demonstrate|considered|tested|studied)|we (?:did|could|do) not|"
+                    r"(?:was|were) not (?:tested|characteri[sz]ed|studied|considered|explored)|"
+                    r"does not (?:account|consider|scale|include)|cannot (?:separate|distinguish|resolve|be tuned|scale)|"
+                    r"noise (?:limits|dominates)|decoherence (?:limits|restricts)|beyond \d+ qubits)\b"),
+}
+_CLAIM_CUE = r"(\bP\(\s*[01]+\s*\)|\b\d+(?:\.\d+)?\s*%|\bfidelity\b|\bprobabilit(?:y|ies)\b|\bsuccess rate\b|\bspeed-?up\b)"
+_CONTRIB_CUE = r"\b(we (?:propose|present|introduce|demonstrate|develop|report)|our (?:main )?(?:contribution|result)s?)\b"
+_RESULT_CUE = r"\b(we (?:observe|observed|find|found|measured|measure|obtain|obtained|achieve|achieved)|results? (?:show|indicate|demonstrate|confirm))\b"
+
+
+def unwrap_pdf_text(text: str) -> str:
+    """Re-join sentences that PDF extraction broke across lines (and words split by hyphenation)."""
+    text = re.sub(r"-{2,}\s*Page \d+\s*-{2,}", "\n", text or "")
+    text = re.sub(r"(\w) -[ \t]*\n[ \t]*([a-z])", r"\1\2", text)          # "quan -\ntum" -> "quantum"
+    text = re.sub(r"(\w)-[ \t]*\n[ \t]*([a-z])", r"\1-\2", text)          # "mid-\ncircuit" -> "mid-circuit"
+    # A line that doesn't end a sentence, followed by one starting in lower case, is a wrapped line.
+    text = re.sub(r"(?<![.!?:])[ \t]*\n[ \t]*(?=[a-z0-9(–])", " ", text)
+    return text
+
+
+_RUNNING_HEADER = re.compile(
+    r"\||\b(?:vol(?:ume)?\.?\s*\d|doi|issn|pp\.|received|accepted|published|open access|copyright|©|https?://|www\.)",
+    re.I)
+
+
+def guess_title(raw_text: str, max_lines: int = 25) -> Optional[str]:
+    """
+    Find a paper's title on its first page, skipping journal running headers
+    ("Nature | Vol 622 | ..."), page markers and article-type labels glued to the title.
+    """
+    lines = [l.strip() for l in (raw_text or "").splitlines()[:max_lines]]
+    for i, line in enumerate(lines):
+        if not line or re.match(r"-{2,}\s*Page", line) or _RUNNING_HEADER.search(line) or line == line.lower():
+            continue  # page markers, running headers, lower-case journal names
+        line = re.sub(r"^(?:Research\s+)?(?:Article|Letter|Review|Perspective)(?=[A-Z])\s*", "", line)
+        line = re.sub(r"^(?:title|abstract)\s*[:.]\s*", "", line, flags=re.I)
+        words = line.split()
+        if len(words) < 3 or len(line) > 220 or line.endswith((".", ":")) and len(words) > 25:
+            continue
+        title = line
+        # A title wrapped onto the next line continues in lower case ("...and\nteleportation on a ...").
+        if i + 1 < len(lines) and re.match(r"^[a-z]", lines[i + 1]) and len(lines[i + 1]) < 120:
+            title = f"{title} {lines[i + 1]}"
+        return re.sub(r"\s+", " ", title).strip()
+    return None
+
+
+def extract_expected_outcomes(text: str) -> List[ExpectedOutcome]:
+    """Parse statements like 'P(00) = 0.5' or 'P(|111>) ≈ 0.48' into ExpectedOutcome records."""
+    found: Dict[str, float] = {}
+    pairs = re.findall(r"P\(\s*\|?([01]{1,10})(?:>|⟩)?\s*\)\s*(?:=|≈|~|of)\s*([01]?\.\d+|[01](?![\d.]))", text or "")
+    # "|00> with prob 0.50", "|11> with probability of 0.5", "|0> probability: 0.25"
+    pairs += re.findall(r"\|([01]{1,10})(?:>|⟩)\s*(?:with\s+)?(?:a\s+)?prob(?:ability|\.)?\s*(?:of\s*)?[=:≈]?\s*([01]?\.\d+|[01](?![\d.]))",
+                        text or "", flags=re.I)
+    for bstate, prob in pairs:
+        try:
+            p = float(prob)
+        except ValueError:
+            continue
+        if 0.0 <= p <= 1.0 and bstate not in found:
+            found[bstate] = p
+    lengths = {len(b) for b in found}
+    if len(lengths) > 1:  # mixed register sizes: keep the most common length only
+        common = max(lengths, key=lambda n: sum(1 for b in found if len(b) == n))
+        found = {b: p for b, p in found.items() if len(b) == common}
+    return [ExpectedOutcome(basis_state=b, expected_probability=p) for b, p in found.items()]
+
+
+def extract_paper_signals(raw_text: str, cap: int = 6) -> Dict[str, List[str]]:
+    """
+    Pull gap-relevant sentences (limitations, future work, open questions, claims,
+    contributions, results) from a paper's own wording. Deterministic; used as the
+    offline fallback and to backfill fields an LLM leaves empty.
+    """
+    text = re.split(r"\n\s*(?:\d+\.?\s*)?(?:references|bibliography)\b", raw_text or "", maxsplit=1, flags=re.I)[0]
+    text = unwrap_pdf_text(text)
+    header = re.compile(r"^(?:\d+\.?\s*)?(?:abstract|introduction|results?|limitations?|future work|future directions|"
+                        r"open questions?|methodology|methods|discussion|conclusions?|outlook)\s*[:.\-–]?\s+", re.I)
+    sentences: List[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or (len(line) < 60 and not re.search(r"[.!?]$", line)):
+            continue  # headings and title lines
+        line = header.sub("", line)
+        sentences += [s.strip() for s in re.split(r"(?<=[.!?])\s+(?=[A-Z(|])", line)]
+    sentences = [s for s in sentences if 30 <= len(s) <= 400]
+
+    out: Dict[str, List[str]] = {k: [] for k in ("limitations", "future_work", "open_questions", "claims", "contributions", "results")}
+
+    def add(key: str, s: str):
+        if s not in out[key] and len(out[key]) < cap:
+            out[key].append(s)
+
+    for s in sentences:
+        for key, pat in _SIGNAL_CUES.items():
+            if re.search(pat, s, re.I):
+                add(key, s)
+                break
+        if re.search(_CLAIM_CUE, s, re.I) and re.search(r"\d", s):
+            add("claims", s)
+        if re.search(_CONTRIB_CUE, s, re.I):
+            add("contributions", s)
+        if re.search(_RESULT_CUE, s, re.I):
+            add("results", s)
+    return out
+
+
 def extract_doi(text: str, filename: Optional[str] = None) -> Optional[str]:
     """
     Extract Digital Object Identifier (DOI) or publication ID from text or filename.
@@ -192,99 +304,97 @@ def extract_strict_num_qubits(raw_text: str) -> Optional[int]:
     return best_candidate
 
 
+def _safe_angle(expr: str) -> Optional[float]:
+    """Parse a rotation angle like 'pi/2', '0.785', '-π/4', '2*pi/3' without eval (the text is untrusted)."""
+    e = expr.strip().lower().replace("π", "pi").replace(" ", "")
+    m = re.fullmatch(r"([+-]?)(\d+(?:\.\d+)?|\.\d+)?\*?(pi)?(?:/(\d+(?:\.\d+)?))?", e)
+    if not m or (m.group(2) is None and m.group(3) is None):
+        return None
+    val = float(m.group(2)) if m.group(2) is not None else 1.0
+    if m.group(3):
+        val *= 3.141592653589793
+    if m.group(4):
+        val /= float(m.group(4))
+    return -val if m.group(1) == "-" else val
+
+
 def extract_strict_gates(raw_text: str, num_qubits: Optional[int] = None) -> List[GateOperation]:
     """
-    Extract gate operations with strict syntax and bound checking.
-    
+    Extract gate operations with strict syntax and bound checking, in document order.
+
     CRITICAL:
     - Never match single letters inside identifiers (e.g. 's' in 's42256').
     - Target qubit indices must strictly be within 0-9.
     - If num_qubits is provided, target indices must be < num_qubits.
+    - Gates are returned in the order they appear in the text (order changes the physics).
+    - Rotation angles are parsed without eval (the text is untrusted).
     """
-    # Sanitize text
-    clean_text = raw_text
+    clean_text = raw_text or ""
     clean_text = re.sub(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b", " ", clean_text)
     clean_text = re.sub(r"\bs\d{5}-\d{3}-\d{5}-\d\b", " ", clean_text, flags=re.IGNORECASE)
     clean_text = re.sub(r"\b(?:19|20)\d{2}\b", " ", clean_text)
 
-    extracted_gates: List[GateOperation] = []
+    found: List[Tuple[int, GateOperation]] = []
+    claimed: List[Tuple[int, int]] = []   # spans already used by a more specific pattern
 
-    # Pattern 1: Single-qubit gates (H, X, Y, Z, S, T)
-    # Require distinct word boundary on both sides and clear gate context
-    single_gate_pat = re.compile(
-        r"\b([HXYZST])\b\s*(?:\([^\)]*\))?\s*(?:gate\s+)?(?:on\s+)?(?:qubits?\s+)?([0-9])\b",
-        re.IGNORECASE
-    )
-    for m in single_gate_pat.finditer(clean_text):
-        g_name = m.group(1).upper()
-        target = int(m.group(2))
-        if 0 <= target <= 9:
-            if num_qubits is None or target < num_qubits:
-                try:
-                    gate_op = GateOperation(name=g_name, target_qubits=[target])
-                    extracted_gates.append(gate_op)
-                except Exception:
-                    pass
+    def in_range(*qs: int) -> bool:
+        return all(0 <= q <= 9 and (num_qubits is None or q < num_qubits) for q in qs)
 
-    # Pattern 2: Two-qubit gates (CX, CNOT, CZ, SWAP)
-    two_gate_pat = re.compile(
-        r"\b(CX|CNOT|CZ|SWAP)\b\s*(?:gate\s+)?(?:on\s+)?(?:qubits?\s+)?([0-9])\s*(?:,|and|\s)\s*([0-9])\b",
-        re.IGNORECASE
-    )
-    for m in two_gate_pat.finditer(clean_text):
-        g_name = m.group(1).upper()
-        if g_name == "CNOT":
-            g_name = "CX"
-        q1 = int(m.group(2))
-        q2 = int(m.group(3))
-        if 0 <= q1 <= 9 and 0 <= q2 <= 9 and q1 != q2:
-            if num_qubits is None or (q1 < num_qubits and q2 < num_qubits):
-                try:
-                    gate_op = GateOperation(name=g_name, target_qubits=[q1, q2])
-                    extracted_gates.append(gate_op)
-                except Exception:
-                    pass
-
-    # Pattern 3: Parametric gates (RX, RY, RZ)
-    param_gate_pat = re.compile(
-        r"\b(RX|RY|RZ)\b\s*\(([^)]+)\)\s*(?:gate\s+)?(?:on\s+)?(?:qubits?\s+)?([0-9])\b",
-        re.IGNORECASE
-    )
-    for m in param_gate_pat.finditer(clean_text):
-        g_name = m.group(1).upper()
-        p_str = m.group(2).strip()
-        target = int(m.group(3))
-        if 0 <= target <= 9:
-            if num_qubits is None or target < num_qubits:
-                try:
-                    clean_p = p_str.replace("pi", "3.14159265").replace("π", "3.14159265")
-                    param_val = float(eval(clean_p, {"__builtins__": {}}, {}))
-                    gate_op = GateOperation(name=g_name, target_qubits=[target], params=[param_val])
-                    extracted_gates.append(gate_op)
-                except Exception:
-                    pass
-
-    # Pattern 4: Qiskit Python syntax: qc.h(0), qc.cx(0, 1), qc.rx(pi/2, 0)
-    qiskit_pat = re.compile(r"\bqc\.([a-z]+)\(([^)]+)\)", re.IGNORECASE)
-    for m in qiskit_pat.finditer(clean_text):
-        method = m.group(1).upper()
-        args = [a.strip() for a in m.group(2).split(",")]
+    def add(m: "re.Match", name: str, targets: List[int], params: Optional[List[float]] = None) -> None:
+        if any(a <= m.start() < b for a, b in claimed):
+            return
         try:
-            if method in ["H", "X", "Y", "Z", "S", "T"] and len(args) == 1:
-                target = int(args[0])
-                if 0 <= target <= 9:
-                    gate_op = GateOperation(name=method, target_qubits=[target])
-                    extracted_gates.append(gate_op)
-            elif method in ["CX", "CNOT", "CZ", "SWAP"] and len(args) == 2:
-                q1, q2 = int(args[0]), int(args[1])
-                g_name = "CX" if method == "CNOT" else method
-                if 0 <= q1 <= 9 and 0 <= q2 <= 9 and q1 != q2:
-                    gate_op = GateOperation(name=g_name, target_qubits=[q1, q2])
-                    extracted_gates.append(gate_op)
+            found.append((m.start(), GateOperation(name=name, target_qubits=targets, params=params)))
+            claimed.append((m.start(), m.end()))
         except Exception:
             pass
 
-    return extracted_gates
+    # Qiskit syntax: qc.h(0), qc.cx(0, 1), qc.rx(pi/2, 0)
+    for m in re.finditer(r"\bqc\.([a-z]+)\(([^)]+)\)", clean_text, re.IGNORECASE):
+        method, args = m.group(1).upper(), [a.strip() for a in m.group(2).split(",")]
+        try:
+            if method in ("H", "X", "Y", "Z", "S", "T") and len(args) == 1 and in_range(int(args[0])):
+                add(m, method, [int(args[0])])
+            elif method in ("CX", "CNOT", "CZ", "SWAP") and len(args) == 2:
+                q1, q2 = int(args[0]), int(args[1])
+                if q1 != q2 and in_range(q1, q2):
+                    add(m, "CX" if method == "CNOT" else method, [q1, q2])
+            elif method in ("RX", "RY", "RZ") and len(args) == 2:
+                ang, q = _safe_angle(args[0]), int(args[1])
+                if ang is not None and in_range(q):
+                    add(m, method, [q], [ang])
+        except ValueError:
+            pass
+
+    # Two-qubit gates written with roles: "CX with control 0 and target 1"
+    for m in re.finditer(r"\b(CX|CNOT|CZ)\b[^.;]{0,30}?\bcontrol\s*(?:qubit\s*)?([0-9])\b[^.;]{0,20}?\btarget\s*(?:qubit\s*)?([0-9])\b",
+                         clean_text, re.IGNORECASE):
+        q1, q2 = int(m.group(2)), int(m.group(3))
+        if q1 != q2 and in_range(q1, q2):
+            add(m, "CX" if m.group(1).upper() == "CNOT" else m.group(1).upper(), [q1, q2])
+
+    # Parametric gates: "RX(pi/2) on qubit 0"
+    for m in re.finditer(r"\b(RX|RY|RZ)\b\s*\(([^)]+)\)\s*(?:gate\s+)?(?:on\s+)?(?:qubits?\s+)?([0-9])\b",
+                         clean_text, re.IGNORECASE):
+        ang, q = _safe_angle(m.group(2)), int(m.group(3))
+        if ang is not None and in_range(q):
+            add(m, m.group(1).upper(), [q], [ang])
+
+    # Two-qubit gates: "CX on qubits 0, 1", "CNOT 0 1", "CX(0,1)"
+    for m in re.finditer(r"\b(CX|CNOT|CZ|SWAP)\b\s*(?:gate\s+)?(?:on\s+)?(?:qubits?\s+)?\(?\s*([0-9])\s*(?:,|and|\s)\s*([0-9])\b",
+                         clean_text, re.IGNORECASE):
+        q1, q2 = int(m.group(2)), int(m.group(3))
+        if q1 != q2 and in_range(q1, q2):
+            add(m, "CX" if m.group(1).upper() == "CNOT" else m.group(1).upper(), [q1, q2])
+
+    # Single-qubit gates: "H on qubit 0", "X gate 1", "H(0)"
+    for m in re.finditer(r"\b([HXYZST])\b\s*(?:\(\s*(?=[0-9]))?(?:gate\s+)?(?:on\s+)?(?:qubits?\s+)?([0-9])\b",
+                         clean_text, re.IGNORECASE):
+        q = int(m.group(2))
+        if in_range(q):
+            add(m, m.group(1).upper(), [q])
+
+    return [g for _, g in sorted(found, key=lambda t: t[0])]
 
 
 class ProposalExtractor:
@@ -346,9 +456,15 @@ class ProposalExtractor:
             response_text = self.llm_client.complete(
                 system_prompt=EXTRACTION_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
-                temperature=0.0
+                temperature=0.0,
+                fallback_to_demo=False,  # canned demo JSON would describe a different document
+                purpose="proposal_extraction",
             )
             parsed_json = self._clean_and_parse_json(response_text)
+            call = getattr(self.llm_client, "last_call", {}) or {}
+            parsed_json.setdefault("extraction_warnings", [])
+            parsed_json["extraction_warnings"] = list(parsed_json["extraction_warnings"]) + [
+                f"Extracted by live LLM ({call.get('provider', '?')}/{call.get('model', '?')}); review before relying on it."]
             parsed_json["raw_text"] = raw_text
             parsed_json["input_mode"] = input_mode
             parsed_json["document_type"] = doc_type
@@ -447,14 +563,27 @@ class ProposalExtractor:
             f"Never confuse DOIs, publication IDs, years, or citations with qubit numbers."
         )
 
+        if getattr(self.llm_client, "demo_mode", False):
+            # Demo mode has no model: analyse the paper's own text rather than returning canned JSON.
+            return self._heuristic_paper_fallback(
+                raw_text=raw_text, document_title=document_title, extracted_doc=extracted_doc,
+                doi=doi, error_note="demo mode, no LLM configured",
+            )
+
         try:
             response_text = self.llm_client.complete(
                 system_prompt=RESEARCH_PAPER_ANALYSIS_PROMPT,
                 user_prompt=user_prompt,
-                temperature=0.0
+                temperature=0.0,
+                fallback_to_demo=False,  # a canned demo answer would describe a different paper
+                purpose="paper_analysis",
             )
             parsed_json = self._clean_and_parse_json(response_text)
             parsed_json["document_type"] = "research_paper"
+            call = getattr(self.llm_client, "last_call", {}) or {}
+            parsed_json["extraction_warnings"] = list(parsed_json.get("extraction_warnings") or []) + [
+                f"Analysed by live LLM ({call.get('provider', '?')}/{call.get('model', '?')}); "
+                f"fields are model interpretations until checked against the source."]
             parsed_json["raw_text"] = raw_text
             parsed_json["source_filename"] = filename
             parsed_json["source_pages"] = pages
@@ -463,13 +592,47 @@ class ProposalExtractor:
             if document_title and not parsed_json.get("title"):
                 parsed_json["title"] = document_title
 
-            # Sanitize experiments num_qubits
+            # Normalise experiments: real papers often describe gates/outcomes in prose, which must not
+            # sink the whole analysis. Valid structured entries are kept; prose moves to text fields.
             if "experiments" in parsed_json and isinstance(parsed_json["experiments"], list):
-                for exp in parsed_json["experiments"]:
+                for i, exp in enumerate(parsed_json["experiments"]):
                     if isinstance(exp, dict):
+                        exp.setdefault("experiment_id", f"EXP-{i + 1:02d}")
+                        exp.setdefault("title", exp.get("experiment_id"))
                         eq = exp.get("num_qubits")
                         if eq is not None and (not isinstance(eq, int) or eq < 1 or eq > 10):
                             exp["num_qubits"] = None
+                        gates, prose_gates = [], []
+                        for g in exp.get("gates") or []:
+                            if not isinstance(g, dict):
+                                prose_gates.append(str(g))
+                                continue
+                            try:
+                                gates.append(GateOperation(**g))
+                            except Exception:
+                                prose_gates.append(str(g.get("name", g)))
+                        exp["gates"] = gates
+                        if prose_gates:
+                            exp["circuit_summary"] = "; ".join(filter(None, [exp.get("circuit_summary"), "Operations: " + ", ".join(prose_gates)]))
+                        outs, prose_outs = [], []
+                        for o in exp.get("expected_outcomes") or []:
+                            try:
+                                outs.append(ExpectedOutcome(**o)) if isinstance(o, dict) else prose_outs.append(str(o))
+                            except Exception:
+                                prose_outs.append(str(o))
+                        exp["expected_outcomes"] = outs
+                        if prose_outs:
+                            exp["findings"] = "; ".join(filter(None, [exp.get("findings"), "Expected: " + "; ".join(prose_outs)]))
+                        if exp["gates"] and not exp.get("num_qubits"):
+                            exp["has_executable_circuit"] = False
+
+            # Backfill gap signals the model left empty from the paper's own sentences.
+            signals = extract_paper_signals(raw_text)
+            for field, key in (("limitations", "limitations"), ("future_work", "future_work"),
+                               ("open_questions", "open_questions"), ("key_claims", "claims"),
+                               ("key_contributions", "contributions"), ("results_and_findings", "results")):
+                if not parsed_json.get(field):
+                    parsed_json[field] = signals[key]
 
             return ResearchPaperAnalysis(**parsed_json)
 
@@ -493,17 +656,31 @@ class ProposalExtractor:
     ) -> ResearchPaperAnalysis:
         """Deterministic rule-based extractor for academic research papers."""
         lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
-        title = document_title or (lines[0][:120] if lines else "Analyzed Research Paper")
+        title = document_title
+        if not title or _RUNNING_HEADER.search(title):
+            title = guess_title(raw_text) or (lines[0][:120] if lines else "Analyzed Research Paper")
 
-        # Extract abstract
+        # Extract abstract; papers without an "Abstract" heading open with it after the title block.
         abstract = None
         abs_match = re.search(r"(?i)\babstract\b[:\s]*(.+?)(?:\n\n|\b(?:introduction|keywords|background)\b|\Z)", raw_text, re.DOTALL)
         if abs_match:
-            abstract = abs_match.group(1).strip()[:1000]
+            abstract = re.sub(r"\s+", " ", abs_match.group(1)).strip()[:1000]
+        unwrapped = unwrap_pdf_text(raw_text)
+        body_sentences = [s.strip() for line in unwrapped.splitlines() if len(line.strip()) >= 60 and not _RUNNING_HEADER.search(line)
+                          for s in re.split(r"(?<=[.!?])\s+(?=[A-Z])", line.strip()) if 50 <= len(s.strip()) <= 400]
+        if not abstract and body_sentences:
+            abstract = " ".join(body_sentences[:3])[:1000]
 
-        # Extract research problem and objective
-        obj_match = re.search(r"(?i)\b(?:objective|goal|purpose|we aim to|in this work we)\b[:\s]*(.+?)(?:\n\n|\. |\Z)", raw_text, re.DOTALL)
-        objective = obj_match.group(1).strip()[:300] if obj_match else (abstract[:300] if abstract else "Investigate quantum computational framework and performance.")
+        # Objective: an explicit objective, else the paper's "Here we ..." sentence, else its opening sentence.
+        obj_match = re.search(r"(?im)^[ \t]*(?:objectives?|goals?|purpose)[ \t]*[:.][ \t]*(.+?)(?:\n\n|\. |\Z)", raw_text, re.DOTALL)
+        here_we = next((s for s in body_sentences if re.search(
+            r"(?i)\b(?:here,? we|in this (?:work|paper|article),? we|we aim to|we (?:study|investigate|demonstrate|present|report|propose|introduce))\b", s)), None)
+        if obj_match:
+            objective = re.sub(r"\s+", " ", obj_match.group(1)).strip()[:300]
+        elif here_we:
+            objective = here_we
+        else:
+            objective = abstract[:300] if abstract else "Not identified by rule-based analysis."
 
         prob_match = re.search(r"(?i)\b(?:problem|challenge|bottleneck|limitation of)\b[:\s]*(.+?)(?:\n\n|\. |\Z)", raw_text, re.DOTALL)
         problem = prob_match.group(1).strip()[:300] if prob_match else "Overcoming quantum resource overhead and noise susceptibility in quantum processing."
@@ -518,9 +695,20 @@ class ProposalExtractor:
 
         # Extract quantum systems discussed
         systems = []
-        for qs in ["Superconducting Transmon", "Trapped Ion", "Neutral Atom", "Photonic", "Silicon Spin"]:
-            if re.search(rf"\b{qs}\b", raw_text, re.IGNORECASE):
-                systems.append(qs)
+        first_seen = {}
+        platform_patterns = {
+            "Superconducting Transmon": r"\bsuperconducting\b|\btransmons?\b",
+            "Trapped Ion": r"\btrapped[- ]ions?\b|\bion[- ]traps?\b",
+            "Neutral Atom": r"\bneutral[- ]atoms?\b|\brydberg[- ]atoms?\b",
+            "Photonic": r"\bphotonic\b",
+            "Silicon Spin": r"\bsilicon spin\b|\bspin qubits?\b",
+        }
+        for qs, pat in platform_patterns.items():
+            m = re.search(pat, raw_text, re.IGNORECASE)
+            if m:
+                first_seen[qs] = m.start()
+        # Primary system first: the one the paper mentions earliest (title / abstract).
+        systems = sorted(first_seen, key=first_seen.get)
         if not systems:
             systems = ["Ideal Statevector Simulation"]
 
@@ -530,7 +718,9 @@ class ProposalExtractor:
 
         experiments: List[QuantumExperimentRecord] = []
         exp_pattern = re.compile(
-            r"(?i)\b(experiment|benchmark|case study|evaluation)\s*([0-9A-Za-z]+)?\b[:\s]*(.+?)(?=\n\s*\n\s*(?:experiment|benchmark|case study|evaluation|results|limitations)|\Z)",
+            # A heading such as "Experiment 1:" / "Benchmark II." at the start of a line; prose that merely
+            # wraps onto a line starting with "experiment" is not an experiment.
+            r"(?im)^[ \t]*(experiment|benchmark|case study|evaluation)[ \t]+([0-9]{1,2}|[IVX]{1,4}|[A-Z])[ \t]*[:.)\-–][ \t]*(.+?)(?=\n\s*\n\s*(?:experiment|benchmark|case study|evaluation|results|limitations)|\Z)",
             re.DOTALL
         )
         exp_matches = list(exp_pattern.finditer(raw_text))
@@ -551,7 +741,8 @@ class ProposalExtractor:
                     circuit_summary="Parametric quantum ansatz" if not e_gates else f"{len(e_gates)} gate operations",
                     has_executable_circuit=bool(e_gates and e_qubits),
                     gates=e_gates if e_qubits else [],
-                    findings="Demonstrated quantum execution and state evaluation."
+                    expected_outcomes=extract_expected_outcomes(full_block),
+                    findings=(extract_paper_signals(full_block, cap=1)["results"] or [None])[0],
                 ))
         else:
             # Create a primary experiment record
@@ -563,32 +754,39 @@ class ProposalExtractor:
                 circuit_summary=f"Gate sequence with {len(strict_gates)} operations" if strict_gates else "Theoretical quantum framework",
                 has_executable_circuit=bool(strict_gates and strict_q),
                 gates=strict_gates if strict_q else [],
-                findings="Scientific findings detailed in paper results section."
+                expected_outcomes=extract_expected_outcomes(raw_text),
+                findings=(extract_paper_signals(raw_text, cap=1)["results"] or [None])[0],
             ))
 
-        # Results and limitations
-        results = ["Evaluated quantum algorithmic performance across simulated computational registers."]
-        limitations = ["Scalability constrained by NISQ decoherence and gate infidelities."]
+        # Results, limitations and gap signals come from the paper's own sentences.
+        signals = extract_paper_signals(raw_text)
+        sections = getattr(extracted_doc, "sections", {}) or {}
+        methodology = (sections.get("methodology") or "").strip()[:600] or "Not identified by rule-based analysis."
+        setup = (sections.get("quantum_system") or "").strip()[:400] or ", ".join(systems)
 
         return ResearchPaperAnalysis(
             title=title,
             doi=doi,
-            publication_info="Peer-Reviewed Quantum Publication" if doi else None,
-            authors=["Research Authors"],
+            publication_info=None,
+            authors=[],
             abstract=abstract,
             research_problem=problem,
             research_objective=objective,
-            methodology="Theoretical derivation combined with numerical quantum circuit simulation.",
+            methodology=methodology,
             algorithms_and_frameworks=frameworks,
-            experimental_setup="Simulated quantum state evolution and measurement distribution analysis.",
+            experimental_setup=setup,
             quantum_systems_discussed=systems,
             experiments=experiments,
-            results_and_findings=results,
-            limitations=limitations,
+            results_and_findings=signals["results"],
+            limitations=signals["limitations"],
+            key_contributions=signals["contributions"],
+            future_work=signals["future_work"],
+            open_questions=signals["open_questions"],
+            key_claims=signals["claims"],
             raw_text=raw_text,
             source_filename=extracted_doc.filename if extracted_doc else None,
             source_pages=extracted_doc.pages if extracted_doc else [],
-            extraction_warnings=[f"Rule-based research paper analysis applied (note: {error_note})"]
+            extraction_warnings=[f"Rule-based research paper analysis applied (reason: {(error_note or '').splitlines()[0][:200]})"]
         )
 
     def _clean_and_parse_json(self, text: str) -> Dict[str, Any]:
@@ -678,7 +876,16 @@ class ProposalExtractor:
 
         # 5. STRICT Gate Sequence Extraction
         # Never match letters in identifiers or out-of-bounds target indices
-        extracted_gates = extract_strict_gates(raw_text, num_qubits=num_qubits)
+        # Read gates from the most specific place: an explicit "Gates:" list, then the methodology
+        # section, then the whole text. Scanning everything first would count gates twice when the
+        # hypothesis also describes the circuit in prose.
+        extracted_gates: List[GateOperation] = []
+        gate_line = re.search(r"(?im)\bgates?(?:\s+sequence)?\s*:\s*(.+)$", raw_text)
+        method_text = (extracted_doc.sections.get("methodology") if extracted_doc else "") or ""
+        for source in ([gate_line.group(1)] if gate_line else []) + ([method_text] if method_text else []) + [raw_text]:
+            extracted_gates = extract_strict_gates(source, num_qubits=num_qubits)
+            if extracted_gates:
+                break
 
         circuit = None
         if extracted_gates:
@@ -718,6 +925,9 @@ class ProposalExtractor:
                     outcomes.append(ExpectedOutcome(basis_state=bstate, expected_probability=p_val))
                 except Exception:
                     pass
+
+        if not outcomes:
+            outcomes = extract_expected_outcomes(raw_text)
 
         # 7. Assumptions
         assumptions = []

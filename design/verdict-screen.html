@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal Verdict Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: clinical lab audit — calm, exact, no salesmanship.
+   IDEA: a measurement readout laid over the author's claim, like a calibration sheet.
+   PICTURE: per-basis-state columns; simulated bar solid, claim outlined, tolerance band shaded.
+   COLOUR and TYPE: white / ink, instrument cobalt for measured data, green-red-ochre only for verdicts; Instrument Sans + JetBrains Mono for circuit code.
+   LAYOUT: quiet queue rail left, verdict sentence as title, chart 2/3 + ruled figures 1/3, one action bar, collapsed detail below. */
+:root{color-scheme:light dark;
+--bg:light-dark(#ffffff,#0f1318);--rail:light-dark(#f2f4f6,#151a21);--ink:light-dark(#17202a,#e7ebf0);
+--mute:light-dark(#5b6673,#9aa5b1);--rule:light-dark(#dde2e7,#29313b);--sim:light-dark(#2747d8,#7d94ff);
+--simsoft:light-dark(#e6eafc,#1d2547);--pass:light-dark(#1d7a4b,#4cc488);--fail:light-dark(#c03526,#ff7a6b);
+--hold:light-dark(#9a6110,#e3a74a);--band:light-dark(rgba(23,32,42,.07),rgba(231,235,240,.08));--sk:light-dark(#e9edf1,#1f262f)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Instrument Sans",system-ui,sans-serif;overflow-x:clip}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sim);outline-offset:2px;border-radius:4px}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14px}
+.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px max(3vw,16px);border-bottom:1px solid var(--rule)}
+.top h1{font-size:17px;font-weight:600;margin:0;flex:1}
+.btn{min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--rule);background:var(--bg);cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--mute)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.primary.fail{background:var(--fail);border-color:var(--fail);color:#fff}
+.btn.primary.pass{background:var(--pass);border-color:var(--pass);color:#fff}
+.btn.primary.hold{background:var(--hold);border-color:var(--hold);color:#fff}
+.btn[disabled]{opacity:.6;cursor:progress}
+.proto{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px max(3vw,16px);background:var(--rail);border-bottom:1px solid var(--rule);font-size:14px;color:var(--mute)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--bg)}
+.seg button{border:0;background:none;padding:6px 12px;min-height:36px;cursor:pointer;font-size:14px}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.shell{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:calc(100vh - 120px)}
+.rail{background:var(--rail);border-right:1px solid var(--rule);padding:16px 12px}
+.rail h2{font-size:14px;font-weight:500;color:var(--mute);margin:4px 8px 10px}
+.q{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.q button{width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:10px;cursor:pointer;display:grid;gap:2px}
+.q button:hover{background:var(--bg)}
+.q button[aria-current=true]{background:var(--bg);box-shadow:inset 3px 0 0 var(--ink)}
+.q .id{font-size:13px;color:var(--mute)}
+.q .t{font-weight:500;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.st{font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--mute)}
+.st[hidden]{display:none}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.hold{color:var(--hold)}.done{color:var(--mute)}.run{color:var(--sim)}
+main{padding:clamp(20px,3vw,40px) max(3vw,16px);max-width:1080px}
+.meta{font-size:14px;color:var(--mute);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.verdict{display:flex;gap:14px;align-items:flex-start;margin-bottom:24px}
+.tag{flex:none;font-size:15px;font-weight:600;padding:5px 12px;border-radius:999px;border:1.5px solid currentColor;margin-top:6px;white-space:nowrap}
+.verdict h2{font-size:clamp(24px,3.2vw,34px);line-height:1.12;font-weight:500;margin:0;text-wrap:balance;max-width:28ch}
+.board{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:clamp(20px,3vw,40px);padding-bottom:24px;border-bottom:1px solid var(--rule)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;color:var(--mute);margin-bottom:12px}
+.legend i{display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:6px;border-radius:2px}
+.chart{position:relative;height:260px;margin-left:34px;border-bottom:1.5px solid var(--ink);display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:clamp(6px,2vw,22px)}
+.grid{position:absolute;left:0;right:0;border-top:1px dashed var(--rule);font-size:12px;color:var(--mute)}
+.grid span{position:absolute;left:-34px;top:-9px;width:28px;text-align:right}
+.col{position:relative;z-index:1}
+.band{position:absolute;left:-4px;right:-4px;background:var(--band);border-radius:3px}
+.bar{position:absolute;bottom:0;left:18%;right:18%;background:var(--sim);border-radius:3px 3px 0 0;transform-origin:bottom;animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+.claim{position:absolute;left:8%;right:8%;border-top:2.5px solid var(--ink)}
+.claim.off{border-color:var(--fail)}
+@keyframes rise{from{transform:scaleY(0)}}
+.xl{margin-left:34px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:clamp(6px,2vw,22px);text-align:center;padding-top:8px;font-size:13px;color:var(--mute)}
+.xl b{display:block;font:500 14px "JetBrains Mono",monospace;color:var(--ink)}
+.xl .miss{color:var(--fail)}
+.figs{display:grid;align-content:start}
+.fg{padding:12px 0;border-top:1px solid var(--rule)}.fg:first-child{border-top:0;padding-top:0}
+.fg .k{font-size:14px;color:var(--mute)}
+.fg .v{font-size:30px;font-weight:500;line-height:1.15;font-variant-numeric:tabular-nums}
+.fg .s{font-size:14px;color:var(--mute)}
+pre.circ{margin:0;padding:14px 16px;background:var(--rail);border-radius:8px;line-height:1.9;overflow-x:auto}
+pre.circ .bad{display:block;margin:0 -16px;padding:0 16px;background:color-mix(in srgb,var(--fail) 14%,transparent);color:var(--fail)}
+.missing{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.missing li{padding:14px 16px;border:1px dashed var(--hold);border-radius:8px}
+.missing b{display:block;font-weight:600}.missing span{font-size:14px;color:var(--mute)}
+.act{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:20px 0}
+.more{position:relative}
+.more summary{list-style:none}.more summary::-webkit-details-marker{display:none}
+.more .menu{position:absolute;z-index:5;top:50px;left:0;background:var(--bg);border:1px solid var(--rule);border-radius:10px;padding:6px;min-width:220px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-radius:6px;cursor:pointer;min-height:44px}
+.menu button:hover{background:var(--rail)}
+.compose{border:1px solid var(--rule);border-radius:10px;padding:16px;margin-bottom:20px;display:grid;gap:10px;max-width:640px}
+.compose label{font-weight:500}
+.compose textarea{min-height:110px;padding:12px;font-size:16px;border:1px solid var(--rule);border-radius:8px;background:var(--bg);resize:vertical}
+.compose textarea[aria-invalid=true]{border-color:var(--fail);box-shadow:0 0 0 1px var(--fail)}
+.err{color:var(--fail);font-size:14px;margin:0}
+.hint{color:var(--mute);font-size:14px;margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+details.sec{border-top:1px solid var(--rule)}
+details.sec>summary{cursor:pointer;padding:16px 0;font-weight:500;min-height:44px}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-bottom:16px}
+th{text-align:left;font-weight:500;color:var(--mute);font-size:14px;padding:8px 10px 8px 0;border-bottom:1px solid var(--rule)}
+td{padding:10px 10px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+td.nw{white-space:nowrap}
+.cite{padding:12px 0;border-bottom:1px solid var(--rule)}.cite:last-child{border:0}
+.cite p{margin:4px 0 0;color:var(--mute);font-size:15px;max-width:68ch}
+.note{font-size:13px;color:var(--mute);margin-top:24px}
+.sk{background:var(--sk);border-radius:6px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.5}}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+.steps li{display:flex;gap:12px;align-items:center;color:var(--mute)}
+.steps li::before{counter-increment:s;content:counter(s);flex:none;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--rule);display:grid;place-items:center;font-size:13px}
+.steps li.on{color:var(--ink);font-weight:500}.steps li.on::before{border-color:var(--sim);color:var(--sim)}
+.steps li.ok{color:var(--ink)}.steps li.ok::before{content:"✓";background:var(--sim);border-color:var(--sim);color:#fff}
+.blank{max-width:520px;padding:clamp(24px,6vw,72px) 0}
+.blank h2{font-size:clamp(24px,3vw,32px);font-weight:500;line-height:1.15;margin:0 0 10px}
+.blank p{color:var(--mute);margin:0 0 22px}
+.ghost{height:120px;display:flex;align-items:flex-end;gap:14px;border-bottom:1.5px solid var(--rule);margin-bottom:28px}
+.ghost i{flex:1;max-width:44px;border:1.5px dashed var(--rule);border-bottom:0;border-radius:3px 3px 0 0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 10px 10px 18px;border-radius:10px;display:flex;gap:14px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:calc(100% - 32px)}
+.toast[hidden],.toast button[hidden]{display:none}
+.toast button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:36px;padding:0 8px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(max-width:860px){.shell{grid-template-columns:1fr}.rail{border-right:0;border-bottom:1px solid var(--rule);padding:12px}
+.q{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:6px}.q li{flex:0 0 220px;scroll-snap-align:start}}
+@media(max-width:700px){.board{grid-template-columns:1fr}.verdict{flex-direction:column;gap:8px}.tag{margin:0}}
+@media(max-width:520px){.xl.dense span{display:none}.chart{height:200px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Proposal verification</h1>
+  <span class="st" id="qcount"></span>
+  <label class="btn" for="file">Upload proposal</label>
+  <input class="vh" type="file" id="file" accept=".pdf,.docx,.txt">
+</header>
+<div class="proto" role="group" aria-label="Prototype state">
+  <span>Prototype state</span>
+  <div class="seg" id="seg">
+    <button data-s="populated" aria-pressed="true">Populated</button>
+    <button data-s="empty" aria-pressed="false">Empty</button>
+    <button data-s="loading" aria-pressed="false">Loading</button>
+    <button data-s="error" aria-pressed="false">Error</button>
+  </div>
+</div>
+<div class="shell">
+  <nav class="rail" aria-label="Review queue"><h2>Waiting for review</h2><ul class="q" id="q"></ul></nav>
+  <main id="main" aria-live="polite"></main>
+</div>
+<div class="toast" id="toast" hidden><span id="tmsg"></span><button id="undo">Undo</button></div>
+
+<script>
+{
+const V={pass:['pass','Claims hold'],fail:['fail',"Claims don't hold"],hold:['hold',"Can't verify yet"]};
+const DEC={pass:['Send to panel','Sent to panel'],fail:['Return to author','Returned to author'],hold:['Request details','Details requested']};
+const NC='Nielsen & Chuang, Quantum Computation and Quantum Information';
+const SAMPLES=[
+{id:'P-0413',title:'Biased Bell-pair statistics from an H–CNOT circuit',file:'bell_asymmetric_v3.pdf',v:'fail',
+ head:'The author claims an 80/20 split; the circuit produces 50/50.',gates:['H 0','CX 0 1'],
+ claim:{'00':.8,'11':.2},sim:{'00':.5,'01':0,'10':0,'11':.5},tol:.05,tvd:.3,fid:.9,
+ checks:[['CHK-STRUC-01','Qubit count','pass','2 qubits stated in Methods.'],['CHK-CIRC-01','Circuit gates','pass','H 0, CX 0 1. All indices within 0–1.'],['CHK-SIM-01','Statevector normalization','pass','Σ|cᵢ|² = 1.000000'],['CHK-DIST-01','Outcome distribution','fail','TVD 0.300 exceeds the 0.05 tolerance. 00: claimed 0.80, simulated 0.50.'],['CHK-PHYS-01','Hardware feasibility','not','Ideal simulation only. Noise and decoherence aren’t modelled.']],
+ cites:[[NC+', §1.3.6','Contradicts','H then CNOT on |00⟩ gives equal weight to |00⟩ and |11⟩, not an 80/20 split.']]},
+{id:'P-0411',title:'Bell state preparation on two transmon qubits',file:'bell_state_proposal.pdf',v:'pass',
+ head:'Simulation matches the claimed 50/50 split between 00 and 11.',gates:['H 0','CX 0 1'],
+ claim:{'00':.5,'11':.5},sim:{'00':.5,'01':0,'10':0,'11':.5},tol:.05,tvd:0,fid:1,
+ checks:[['CHK-STRUC-01','Qubit count','pass','2 qubits stated in Methods.'],['CHK-CIRC-01','Circuit gates','pass','H 0, CX 0 1. All indices within 0–1.'],['CHK-SIM-01','Statevector normalization','pass','Σ|cᵢ|² = 1.000000'],['CHK-DIST-01','Outcome distribution','pass','TVD 0.000, within the 0.05 tolerance.'],['CHK-PHYS-01','Hardware feasibility','not','Ideal simulation only. Noise and decoherence aren’t modelled.']],
+ cites:[[NC+', §1.3.6','Supports','Defines |Φ+⟩ = (|00⟩ + |11⟩)/√2, prepared by H then CNOT.'],['Bell (1964), On the Einstein Podolsky Rosen paradox','Supports','Describes the correlations the proposal relies on; no conflict found.']]},
+{id:'P-0414',title:'Two-qubit entangler with an extended control line',file:'entangler_draft.docx',v:'fail',
+ head:'The circuit applies CX to qubit 2, but the register only has qubits 0 and 1.',gates:['H 0','CX 0 2'],bad:1,
+ checks:[['CHK-STRUC-01','Qubit count','pass','2 qubits stated.'],['CHK-CIRC-01','Circuit gates','fail','Line 2, CX 0 2: target qubit 2 is outside the register (0–1).'],['CHK-SIM-01','Statevector normalization','not','Skipped because the circuit is invalid.'],['CHK-DIST-01','Outcome distribution','not','Skipped because the circuit is invalid.'],['CHK-PHYS-01','Hardware feasibility','not','Skipped.']],cites:[]},
+{id:'P-0415',title:'Entanglement witness for a photonic register',file:'witness_outline.docx',v:'hold',
+ head:'The proposal doesn’t state a qubit count, a circuit or expected outcomes.',
+ missing:[['Qubit count','No register size found. Page numbers and the DOI were ignored.'],['Gate sequence','No circuit or gate list found in Methods.'],['Expected outcomes','No probabilities or target state stated.']],
+ checks:[['CHK-STRUC-01','Qubit count','hold','No qubit count found.'],['CHK-CIRC-01','Circuit gates','hold','No gate sequence found.'],['CHK-SIM-01','Statevector normalization','not','Nothing to simulate.'],['CHK-DIST-01','Outcome distribution','hold','No expected outcomes stated.'],['CHK-PHYS-01','Hardware feasibility','not','Skipped.']],cites:[]},
+{id:'P-0416',title:'Three-qubit GHZ state for a parity-check demonstration',file:'ghz_proposal.pdf',v:'pass',
+ head:'Simulation matches the claimed 50/50 split between 000 and 111.',gates:['H 0','CX 0 1','CX 1 2'],
+ claim:{'000':.5,'111':.5},sim:{'000':.5,'001':0,'010':0,'011':0,'100':0,'101':0,'110':0,'111':.5},tol:.05,tvd:0,fid:1,
+ checks:[['CHK-STRUC-01','Qubit count','pass','3 qubits stated.'],['CHK-CIRC-01','Circuit gates','pass','H 0, CX 0 1, CX 1 2. All indices within 0–2.'],['CHK-SIM-01','Statevector normalization','pass','Σ|cᵢ|² = 1.000000'],['CHK-DIST-01','Outcome distribution','pass','TVD 0.000, within the 0.05 tolerance.'],['CHK-PHYS-01','Hardware feasibility','not','Ideal simulation only. Noise and decoherence aren’t modelled.']],
+ cites:[[NC,'Supports','A second CNOT extends the Bell circuit to (|000⟩ + |111⟩)/√2.']]}];
+const CS={pass:['pass','Pass'],fail:['fail','Fail'],hold:['hold','Inconclusive'],not:['done','Not run']};
+const STEPS=['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report'];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let Q=[],sel=null,view='populated',compose=null,err='',timer=null,last=null,errFile='',next=417;
+
+function status(p){
+  if(p.state==='run')return['run','Verifying…'];
+  if(p.state==='bad')return['fail','Couldn’t read file'];
+  if(p.dec)return['done',DEC[p.v][1]];
+  return V[p.v];}
+function renderQ(){
+  $('#q').innerHTML=Q.length?Q.map(p=>{const [c,t]=status(p);return `<li><button data-id="${esc(p.id)}" aria-current="${p.id===sel}">
+    <span class="id">${esc(p.id)}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span></button></li>`}).join('')
+    :'<li class="hint" style="padding:8px">The queue is empty.</li>';
+  const open=Q.filter(p=>!p.dec&&p.state!=='bad').length;
+  $('#qcount').textContent=open?`${open} to review`:'';$('#qcount').hidden=!open;}
+const pct=x=>(x*100).toFixed(1)+'%';
+function chart(p){
+  const ks=Object.keys(p.sim).sort();
+  const cols=ks.map(k=>{const s=p.sim[k],c=p.claim[k]??0,off=Math.abs(c-s)>p.tol;
+    const band=(c>0)?`<div class="band" style="bottom:${pct(Math.max(0,c-p.tol))};height:${pct(Math.min(1,c+p.tol)-Math.max(0,c-p.tol))}"></div>`:'';
+    const mark=(c>0||off)?`<div class="claim ${off?'off':''}" style="bottom:${pct(c)}"></div>`:'';
+    return `<div class="col">${band}${s>0?`<div class="bar" style="height:${pct(s)}"></div>`:''}${mark}</div>`}).join('');
+  const labels=ks.map(k=>{const s=p.sim[k],c=p.claim[k]??0,off=Math.abs(c-s)>p.tol;
+    return `<div><b>|${k}⟩</b><span class="${off?'miss':''}">${s.toFixed(2)} / ${c.toFixed(2)}</span></div>`}).join('');
+  return `<div class="legend"><span><i style="background:var(--sim)"></i>Simulated</span><span><i style="border-top:2.5px solid var(--ink);height:0;vertical-align:4px"></i>Author's claim</span><span><i style="background:var(--band)"></i>Tolerance ±${p.tol}</span></div>
+  <div class="chart" role="img" aria-label="${ks.map(k=>`${k}: simulated ${p.sim[k]}, claimed ${p.claim[k]??0}`).join('; ')}">
+  ${[.25,.5,.75,1].map(g=>`<div class="grid" style="bottom:${g*100}%"><span>${g}</span></div>`).join('')}${cols}</div>
+  <div class="xl ${ks.length>4?'dense':''}">${labels}</div>
+  <p class="hint" style="margin-top:8px">Each column shows simulated / claimed probability.</p>`;}
+function picture(p){
+  if(p.sim)return chart(p);
+  if(p.missing)return `<ul class="missing">${p.missing.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ul>`;
+  return `<p class="hint" style="margin:0 0 8px">Circuit as submitted</p><pre class="circ">${p.gates.map((g,i)=>i===p.bad?`<span class="bad">${g}   ← qubit 2 doesn’t exist</span>`:g+'\n').join('')}</pre>`;}
+function figs(p){
+  const pass=p.checks.filter(c=>c[2]==='pass').length,fail=p.checks.filter(c=>c[2]==='fail').length,not=p.checks.filter(c=>c[2]==='not').length,hold=p.checks.length-pass-fail-not;
+  const rest=[fail&&`${fail} failed`,hold&&`${hold} inconclusive`,not&&`${not} not run`].filter(Boolean).join(', ');
+  const f=(k,v,s,c='')=>`<div class="fg"><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
+  return f('Total variation distance',p.sim?p.tvd.toFixed(3):'—',p.sim?`Limit ${p.tol}`:'Not simulated',p.sim&&p.tvd>p.tol?'fail':'')
+   +f('State fidelity',p.sim?p.fid.toFixed(3):'—',p.sim?'Claimed vs simulated state':'Not simulated')
+   +f('Checks passed',`${pass} of ${p.checks.length}`,rest||'All checks passed')
+   +(p.sim?`<div class="fg"><div class="k">Circuit</div><pre class="circ" style="margin-top:6px">${p.gates.join('\n')}</pre></div>`:'');}
+function populated(){
+  const p=Q.find(x=>x.id===sel);if(!p)return blank();
+  if(p.state==='run')return loading(p);
+  if(p.state==='bad')return errorView(p);
+  const [c,t]=V[p.v],[act]=DEC[p.v];
+  const comp=compose===p.id?`<form class="compose" id="cf" novalidate>
+    <label for="msg">${p.v==='fail'?'What should the author fix?':'What does the author need to add?'}</label>
+    <textarea id="msg" aria-describedby="msgh" ${err?'aria-invalid="true"':''} placeholder="${p.v==='fail'?'e.g. The H–CNOT circuit gives 50/50 on 00 and 11. Revise the expected distribution or the circuit.':'e.g. State the register size, the gate sequence and the expected outcome probabilities.'}">${esc(p.draft||'')}</textarea>
+    ${err?`<p class="err" id="msgh">${err}</p>`:`<p class="hint" id="msgh">The check log goes with your note.</p>`}
+    <div class="row"><button class="btn primary ${c}" type="submit">${act}</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>`:'';
+  const decided=p.dec?`<p class="hint">${DEC[p.v][1]}. <button class="btn" id="reopen" style="min-height:36px;margin-left:8px">Reopen</button></p>`:'';
+  return `<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span><span>Verified ${p.when||'today, 09:42'}</span></div>
+  <div class="verdict"><span class="tag ${c}">${t}</span><h2>${esc(p.head)}</h2></div>
+  <section class="board"><div>${picture(p)}</div><div class="figs">${figs(p)}</div></section>
+  ${decided||(compose===p.id?'<div style="height:20px"></div>':`<div class="act">
+    <button class="btn primary ${c}" id="go" ${p.busy?'disabled':''}>${p.busy?'Sending…':act}</button>
+    <details class="more"><summary class="btn">More</summary><div class="menu">
+      <button id="copy">Copy report JSON</button><button id="rerun">Re-run verification</button></div></details></div>`)}
+  ${comp}
+  <details class="sec" open><summary>Check log (${p.checks.length})</summary><table class="stack"><thead><tr><th>Check</th><th>Result</th><th>Evidence</th></tr></thead><tbody>
+  ${p.checks.map(([id,n,s,d])=>`<tr><td>${n}<div class="hint mono" style="font-size:12px">${id}</div></td><td class="nw"><span class="st ${CS[s][0]}">${CS[s][1]}</span></td><td>${d}</td></tr>`).join('')}</tbody></table></details>
+  <details class="sec"><summary>Literature (${p.cites.length})</summary>${p.cites.length?p.cites.map(([s,st,t])=>`<div class="cite"><span class="st ${st==='Supports'?'pass':'fail'}">${st}</span> ${s}<p>${t}</p></div>`).join(''):'<p class="hint" style="padding-bottom:16px">Not checked. Literature review runs after the circuit passes structural checks.</p>'}</details>
+  <p class="note">Sample data from the project's benchmark cases. A pass covers ideal simulation only; expert review is still required before running on hardware.</p>`;}
+function loading(p){
+  const i=p.step||0;
+  return `<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span></div>
+  <div class="verdict"><div class="sk" style="width:110px;height:32px;border-radius:999px"></div><div style="flex:1;width:100%"><div class="sk" style="height:30px;max-width:520px;margin-bottom:10px"></div><div class="sk" style="height:30px;max-width:340px"></div></div></div>
+  <section class="board"><div><ol class="steps" aria-label="Verification progress">${STEPS.map((s,j)=>`<li class="${j<i?'ok':j===i?'on':''}">${s}${j===i?'…':''}</li>`).join('')}</ol>
+  <p class="hint" style="margin-top:18px">Usually takes about 5 seconds. You can review other proposals meanwhile.</p></div>
+  <div class="figs">${[1,2,3].map(()=>`<div class="fg"><div class="sk" style="height:14px;width:60%;margin-bottom:8px"></div><div class="sk" style="height:30px;width:40%"></div></div>`).join('')}</div></section>`;}
+function errorView(p){
+  return `<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span></div>
+  <div class="verdict"><span class="tag fail">Not verified</span><h2>Couldn’t read ${esc(p.file)}</h2></div>
+  <div class="blank" style="padding-top:0"><p>${esc(p.why)}</p>
+  <div class="row"><label class="btn primary" for="file">Upload another file</label><button class="btn" id="drop">Remove from queue</button></div></div>`;}
+function blank(){
+  return `<div class="blank"><div class="ghost" aria-hidden="true"><i style="height:40%"></i><i style="height:15%"></i><i style="height:15%"></i><i style="height:40%"></i></div>
+  <h2>No proposals waiting for review</h2><p>Upload a proposal as PDF, DOCX or plain text. The circuit is extracted, simulated and audited in about 5 seconds.</p>
+  <div class="row"><label class="btn primary" for="file">Upload proposal</label><button class="btn" id="samples">Load sample proposals</button></div></div>`;}
+function render(){renderQ();$('#main').innerHTML=Q.length?populated():blank();
+  document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===view));}
+
+function toast(msg,undo){$('#tmsg').textContent=msg;$('#undo').hidden=!undo;last=undo;$('#toast').hidden=false;
+  clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').hidden=true,5000);}
+function verify(p,result){
+  p.state='run';p.step=0;sel=p.id;render();
+  const tick=()=>{if(p.step<STEPS.length-1){p.step++;render();p.t=setTimeout(tick,650)}
+    else{Object.assign(p,result,{state:null,when:'just now'});render();toast(`Verified ${p.file}`)}};
+  p.t=setTimeout(tick,650);}
+function upload(name){
+  const ext=(name.split('.').pop()||'').toLowerCase(),id='P-0'+(next++);
+  const p={id,file:name,title:name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ')};
+  Q.unshift(p);compose=null;
+  if(!['pdf','docx','txt'].includes(ext)||/scan/i.test(name)){
+    p.state='bad';p.why=/scan/i.test(name)?'The PDF has no text layer, so the qubit count, circuit and expected outcomes can’t be extracted. Upload a DOCX or a text-based PDF.':`.${ext||'unknown'} files aren’t supported. Upload a PDF, DOCX or TXT file.`;
+    sel=id;render();return;}
+  const base=JSON.parse(JSON.stringify(SAMPLES[/ghz/i.test(name)?4:1]));delete base.id;delete base.file;delete base.title;
+  verify(p,base);}
+function setView(s){view=s;Q.forEach(p=>clearTimeout(p.t));compose=null;err='';
+  if(s==='empty'){Q=[];sel=null;render()}
+  else{Q=JSON.parse(JSON.stringify(SAMPLES));sel=Q[0].id;
+    if(s==='loading')upload('ghz_three_qubit_v2.docx');
+    else if(s==='error')upload('cryo_lab_proposal_scan.pdf');
+    else render();}}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  const p=Q.find(x=>x.id===sel);
+  if(t.dataset.s){setView(t.dataset.s);return}
+  if(t.dataset.id){sel=t.dataset.id;compose=null;err='';render();$('#main').focus?.();return}
+  switch(t.id){
+    case 'samples':setView('populated');break;
+    case 'go':
+      if(p.v==='pass'){p.busy=true;render();setTimeout(()=>{p.busy=false;p.dec=true;render();toast('Sent to panel',()=>{p.dec=false;render()})},600)}
+      else{compose=p.id;err='';render();$('#msg').focus()}break;
+    case 'cancel':compose=null;err='';render();break;
+    case 'reopen':p.dec=false;render();break;
+    case 'rerun':{const r=JSON.parse(JSON.stringify(p));verify(p,{checks:r.checks,v:r.v,head:r.head});break}
+    case 'copy':{const {state,t:_,busy,...rep}=p;
+      Promise.resolve().then(()=>navigator.clipboard.writeText(JSON.stringify(rep,null,2))).then(()=>toast('Report copied'),()=>toast('Couldn’t copy: the browser blocked clipboard access'));
+      t.closest('details').open=false;break}
+    case 'drop':Q=Q.filter(x=>x!==p);sel=Q[0]?.id;render();break;
+    case 'undo':$('#toast').hidden=true;last&&last();break;}
+});
+document.addEventListener('input',e=>{if(e.target.id==='msg'){const p=Q.find(x=>x.id===sel);p.draft=e.target.value;
+  if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
+document.addEventListener('submit',e=>{e.preventDefault();const p=Q.find(x=>x.id===sel),v=(p.draft||'').trim();
+  if(v.length<20){err=v?`Add ${20-v.length} more characters so the author knows what to change.`:'Add a note so the author knows what to change.';render();$('#msg').focus();return}
+  compose=null;err='';p.dec=true;render();toast(DEC[p.v][1],()=>{p.dec=false;render()});});
+$('#file').addEventListener('change',e=>{const f=e.target.files[0];if(f){view='populated';upload(f.name)}e.target.value='';});
+setView('populated');
+}
+</script>
+</body>
+</html>

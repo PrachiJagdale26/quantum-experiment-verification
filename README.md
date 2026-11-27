@@ -1,10 +1,75 @@
-# AI-Based Verification of Quantum Experiment Proposals
+# Overlap: LLM-Based Research Gap Identification and Experiment Planning for Scientific Literature
 
-A research-grade verification prototype combining **Generative AI extraction**, **Quantum-Domain Retrieval-Augmented Generation (RAG)**, **Qiskit Statevector Simulation**, and an **Independent Scientific Verification Engine**.
+Overlap reads quantum-computing papers, finds **research gaps** across them, designs **experiments** that would fill those gaps, and **verifies** each experiment plan by simulating its circuit with Qiskit and auditing it against scientific rules.
 
-Designed to assist quantum researchers, funding panels, and laboratory directors in vetting quantum experiment proposals, cross-referencing literature claims, detecting mathematical inconsistencies, simulating target quantum circuits, and exporting comprehensive audit reports.
+Every gap is backed by quotes from the papers, and every plan carries an executable circuit with predicted outcomes, so the pipeline's output can be checked rather than taken on trust.
+
+## How it works
+
+```
+ 1. PAPERS                2. GAPS                       3. PLANS                     4. VERIFY
+ upload PDF/DOCX/TXT  →   compare all papers for:   →   for a chosen gap:        →   simulate the circuit (Qiskit)
+ extract limitations,     • stated limitations          • hypothesis + rationale     audit 6 rules (qubits, gates,
+ future work, open        • future work / open qs       • method, variables          normalization, distribution,
+ questions, claims,       • untried circuit × platform  • baseline, metrics, risks   literature, hardware)
+ experiments; index       • qubit-scale limits          • executable circuit +       revise the plan once if it
+ into the knowledge base  • conflicting results          theoretical prediction      fails, then re-verify
+                          rank by novelty, evidence,
+                          feasibility
+```
+
+| Stage | Code | What it does |
+|---|---|---|
+| 1. Literature | `src/research/library.py` (`PaperLibrary`) | Extracts text (`DocumentExtractor`), analyses each paper into a `ResearchPaperAnalysis` (limitations, future work, open questions, claims, experiments), and indexes chunks into the knowledge base. |
+| 2. Gaps | `src/research/gap_finder.py` (`GapFinder`) | Five detectors build candidate gaps with verbatim evidence, then merge, score and rank them. **Novelty** = 1 − similarity to the rest of the literature in the knowledge base. **Evidence** = number of papers and quotes. **Feasibility** = whether the gap can be tested with a ≤10-qubit circuit. |
+| 3. Plans | `src/research/planner.py` (`ExperimentPlanner`) | Writes an `ExperimentPlan` with an executable `ProposalSpecification`. Template predictions come from textbook theory, not from the simulator, so verification is a genuine check. |
+| 4. Verify | `src/verification/engine.py` (`VerificationEngine`), `src/research/pipeline.py` | Simulates and audits each plan. If a plan fails, it is revised once using the failed checks as feedback, then re-verified. |
+| Report | `ResearchPipeline.agenda_markdown()` | A research agenda listing the ranked gaps with their evidence and every plan with its verification status. |
+
+**LLM and rules.** With a working LLM (Vertex AI / Gemini / OpenAI / Anthropic), the model analyses papers, rewrites gap statements and writes plans. Its output is schema-validated, and it can never add a gap without deterministic evidence behind it. Without one, or when the provider fails (for example, billing disabled), every stage falls back to a rule-based path that works offline, and the app shows which mode is active.
+
+## Quick start
+
+```powershell
+.\.venv\Scripts\streamlit.exe run overlap_app.py --server.port 8502
+```
+
+Open http://localhost:8502 → **Load 4 sample papers** → **Find research gaps** → open a gap → **Plan an experiment** → **Download research agenda**.
+
+- The sample papers in `data/sample_papers/` are **synthetic**, written to demonstrate the method. Each has deliberately planted gaps (answer key in `planted_gaps.json`).
+- **Check a proposal** verifies a single experiment proposal directly (stage 4 on its own).
+- **Full dashboard** opens the original research dashboard with all 9 tabs (knowledge base, benchmarks, agentic workflow and more).
+
+## Evaluation
+
+```powershell
+.\.venv\Scripts\python.exe evaluate.py --gaps
+```
+
+Current results on the synthetic papers (offline, rule-based mode):
+
+| Metric | Value |
+|---|---|
+| Planted-gap recall | 1.00 (5 of 5) |
+| Precision, lower bound (found gaps matching a planted gap) | 0.50 (the extra gaps are real limitations stated in the papers) |
+| Gaps with quoted evidence | 1.00 |
+| Plans verified first time | 1.00 |
+
+`python evaluate.py` (no flag) still runs the original proposal-verification benchmark.
+
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --deselect tests/test_gemini_integration.py --deselect tests/test_vertex_ai_integration.py
+```
+
+New tests cover the research pipeline: `test_gap_finder.py`, `test_planner.py`, `test_research_pipeline.py`, `test_agent_paper_branch.py` and `test_llm_fallback.py`. The two deselected files call live LLM APIs.
 
 ---
+
+# Reference: the verification engine (stage 4)
+
+The sections below document the verification engine and the original research dashboard (`app.py`) that stage 4 is built on.
 
 ## 1. System Architecture
 

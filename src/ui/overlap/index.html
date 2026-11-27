@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overlap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=STIX+Two+Text:ital,wght@0,400;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+/* Overlap — LLM-based research-gap identification and experiment planning for quantum literature.
+   Flow: Papers -> Gaps -> Plans (each plan verified by simulation). Separate: check a single proposal.
+   IDEA: ⟨claim|sim⟩ — what the literature claims vs. what is missing vs. what a simulation confirms.
+   Deep indigo night / lavender day; Sora UI, STIX Two italic for kets and maths. */
+:root{color-scheme:light dark;
+--bg:light-dark(#f6f5fd,#100f24);--surf:light-dark(#ffffff,#17153a);--rail:light-dark(#eceaf9,#131130);
+--ink:light-dark(#1b1838,#ecebff);--mute:light-dark(#5f5c84,#a3a1cc);--rule:light-dark(#dcd9f0,#2b2858);
+--amp:light-dark(#4b3fd6,#b9b2ff);--ampsoft:light-dark(#e4e1fc,#262259);--on:light-dark(#ffffff,#100f24);
+--pass:light-dark(#0f7a5c,#5fe0b0);--fail:light-dark(#c42d4a,#ff7d8c);--hold:light-dark(#8f5e00,#f5c76b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+/* Streamlit gives component iframes scrolling="no", so the app scrolls its own panes. */
+html,body{height:100%;overflow:hidden}
+body{display:flex;flex-direction:column;margin:0;background:var(--bg);color:var(--ink);font:300 16px/1.6 Sora,system-ui,sans-serif;overflow-x:clip}
+b,strong,h1,h2,h3{font-weight:500}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amp);outline-offset:3px;border-radius:6px}
+.ket,.math{font-family:"STIX Two Text",Georgia,serif;font-style:italic;font-weight:400}
+.top{flex:none;z-index:6;background:var(--bg);display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px max(3vw,16px);border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:34px;height:34px}
+.brand h1{margin:0;font-size:18px;line-height:1}
+.brand .ket{font-size:15px;color:var(--mute);margin-left:4px}
+.nav{display:flex;gap:2px;flex:1;margin-left:14px;align-items:center;flex-wrap:wrap}
+.nav button,.nav a{border:0;background:none;padding:8px 12px;border-radius:10px;font-size:14px;color:var(--mute);text-decoration:none;min-height:40px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.nav button:hover,.nav a:hover{color:var(--ink);background:var(--rail)}
+.nav [aria-current=page]{color:var(--ink);background:var(--rail);font-weight:500}
+.nav .num{width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:12px;font-weight:500}
+.nav [aria-current=page] .num{background:var(--amp);border-color:var(--amp);color:var(--on)}
+.nav .arrow{color:var(--rule);font-size:13px}
+.nav .sep{width:1px;height:22px;background:var(--rule);margin:0 8px}
+.mode{font-size:13px;color:var(--mute)}
+.btn{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--rule);background:var(--surf);cursor:pointer;font-weight:400;display:inline-flex;align-items:center;gap:8px;transition:border-color .15s;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--amp)}
+.btn.primary{background:var(--amp);border-color:var(--amp);color:var(--on);font-weight:500}
+.btn.primary.pass{background:var(--pass);border-color:var(--pass)}
+.btn.primary.fail{background:var(--fail);border-color:var(--fail)}
+.btn.primary.hold{background:var(--hold);border-color:var(--hold)}
+.btn[disabled]{opacity:.6;cursor:progress}
+.link{border:0;background:none;color:var(--mute);cursor:pointer;padding:8px;min-height:36px;text-decoration:underline;font-size:13px;text-align:left}
+.shell{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr)}
+.rail{background:var(--rail);padding:18px 12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0}
+.pane{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.rail h2{font-size:14px;font-weight:400;color:var(--mute);margin:0 8px}
+.q{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.q button{width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:14px;padding:12px;cursor:pointer;display:grid;gap:3px}
+.q button:hover{background:var(--surf)}
+.q button[aria-current=true]{background:var(--surf);border-color:var(--rule);box-shadow:0 6px 20px -12px rgba(40,30,140,.5)}
+.q .id{font-size:13px;color:var(--mute);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.q .t{font-weight:400;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.foot{margin-top:auto;display:grid;gap:2px;padding:8px}
+.keys{font-size:13px;color:var(--mute);margin:0 0 4px}
+kbd{font:500 12px Sora,sans-serif;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surf)}
+.st{font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--mute)}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
+.st[hidden]{display:none}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.hold{color:var(--hold)}.done{color:var(--mute)}.run{color:var(--amp)}
+.chip{font-size:12px;padding:1px 9px;border-radius:999px;font-weight:500;background:color-mix(in srgb,currentColor 14%,transparent);white-space:nowrap}
+.t-stated_limitation{color:var(--hold)}.t-future_work{color:var(--amp)}.t-unexplored_combination{color:var(--pass)}.t-scale_limit{color:var(--amp)}.t-conflicting_results{color:var(--fail)}
+main{padding:clamp(20px,3vw,40px) max(3vw,16px);max-width:1120px;width:100%}
+.hero{position:relative;padding:4px 0 26px;isolation:isolate}
+.fringe{position:absolute;right:0;top:-20px;width:min(46%,420px);height:150px;z-index:-1;opacity:.4;-webkit-mask:linear-gradient(90deg,transparent,#000 40%);mask:linear-gradient(90deg,transparent,#000 40%)}
+.meta{font-size:14px;color:var(--mute);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500;padding:4px 14px 4px 10px;border-radius:999px;background:color-mix(in srgb,currentColor 12%,transparent);margin-bottom:12px}
+.tag .ket{font-size:17px}
+.hero h2{font-size:clamp(24px,3.2vw,36px);line-height:1.15;font-weight:400;margin:0;text-wrap:balance;max-width:30ch;letter-spacing:-.01em}
+.lead{font-size:17px;color:var(--mute);margin:12px 0 0;max-width:66ch}
+.hero .act{padding:18px 0 0}
+.board{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)}
+.stack-gap{display:grid;gap:clamp(16px,2.4vw,28px);margin-top:clamp(16px,2.4vw,28px)}
+.panel{background:var(--surf);border:1px solid var(--rule);border-radius:20px;padding:clamp(16px,2.2vw,26px)}
+.panel h3{font-size:15px;margin:0 0 4px}
+.panel .sub{font-size:14px;color:var(--mute);margin:0 0 16px;max-width:60ch}
+.callout{border-radius:14px;padding:14px 16px;background:color-mix(in srgb,var(--amp) 10%,transparent);margin:0 0 22px;max-width:760px}
+.disks{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:14px 10px}
+.disk{margin:0;text-align:center}
+.disk svg{width:100%;max-width:96px;aspect-ratio:1;display:block;margin:0 auto}
+.disk .shell{fill:var(--ampsoft);stroke:var(--rule)}
+.disk .fill{fill:var(--amp);transform-box:fill-box;transform-origin:center;animation:fill .9s cubic-bezier(.2,.8,.2,1) both}
+.disk .phase{stroke:var(--on);stroke-width:2;stroke-linecap:round}
+.disk .ring{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:4 3}
+.disk.off .ring{stroke:var(--fail);stroke-width:2}
+.disk figcaption{display:grid;line-height:1.3;margin-top:4px}
+.disk .ket{font-size:19px}
+.disk .num{font-weight:500;font-variant-numeric:tabular-nums}
+.disk .cl{font-size:13px;color:var(--mute)}
+.disk.off .cl{color:var(--fail);font-weight:500}
+@keyframes fill{from{transform:scale(0)}}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--mute);margin-top:18px;padding-top:14px;border-top:1px solid var(--rule)}
+.legend svg{width:16px;height:16px;vertical-align:-3px;margin-right:6px}
+.circ{margin-top:18px}
+.circ svg{width:100%;height:auto;display:block}
+.circ .wire{stroke:var(--mute);stroke-width:1.2}.circ .ghost{stroke:var(--fail);stroke-width:1.2;stroke-dasharray:5 4}
+.circ .ql{font:italic 17px "STIX Two Text",serif;fill:var(--ink)}.circ .ql.bad{fill:var(--fail)}
+.circ .gate{fill:var(--surf);stroke:var(--amp);stroke-width:1.6}.circ .gl{font:500 13px Sora,sans-serif;fill:var(--amp);text-anchor:middle}
+.circ .gate.b{stroke:var(--fail)}.circ .gl.b{fill:var(--fail)}
+.circ .cl{stroke:var(--amp);stroke-width:1.6}.circ .dot{fill:var(--amp)}.circ .tgt{fill:var(--surf);stroke:var(--amp);stroke-width:1.6}
+.circ .cb{stroke:var(--fail);stroke-width:1.8}.circ .dotb{fill:var(--fail)}.circ .tgtb{fill:var(--surf);stroke:var(--fail);stroke-width:1.8}
+.circ .meter{fill:var(--surf);stroke:var(--mute)}.circ .arc{fill:none;stroke:var(--mute);stroke-width:1.3}
+.circ .why{font:400 13px Sora,sans-serif;fill:var(--fail)}
+.errbox{margin:0;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--fail) 10%,transparent);color:var(--fail)}
+.side{display:grid;gap:clamp(16px,2.4vw,28px);align-content:start}
+.ov svg{width:100%;max-width:260px;display:block;margin:6px 0 4px}
+.ov .ax{stroke:var(--rule)}.ov .vs{stroke:var(--amp);stroke-width:3;stroke-linecap:round}.ov .vc{stroke:var(--ink);stroke-width:2;stroke-dasharray:5 4;stroke-linecap:round}
+.ov .vc.off{stroke:var(--fail)}.ov .ang{fill:color-mix(in srgb,var(--fail) 22%,transparent);stroke:var(--fail)}
+.ov text{font:italic 15px "STIX Two Text",serif;fill:var(--ink)}
+.big{font-size:clamp(34px,4vw,46px);font-weight:300;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.big+.math{display:block;font-size:17px;color:var(--mute);margin-top:4px}
+.fg{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--rule)}
+.fg:first-of-type{border-top:0}
+.fg span{color:var(--mute);font-size:14px}.fg b{font-variant-numeric:tabular-nums;text-align:right}
+.meterrow{padding:10px 0;border-top:1px solid var(--rule)}
+.meterrow .hd{display:flex;justify-content:space-between;font-size:14px}.meterrow .hd span{color:var(--mute)}
+.bar{height:8px;border-radius:99px;background:var(--ampsoft);margin:6px 0 4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--amp);border-radius:99px}
+.meterrow p{margin:0;font-size:13px;color:var(--mute)}
+.missing{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.missing li{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--hold) 10%,transparent)}
+.missing .ket{font-size:22px;color:var(--hold);line-height:1.1;flex:none;width:34px}
+.missing b{display:block}.missing span{font-size:14px;color:var(--mute)}
+.signals{display:grid;gap:18px}
+.sig h4{margin:0 0 8px;font-size:14px;font-weight:500;display:flex;gap:8px;align-items:center}
+.sig h4 .ket{font-size:19px;color:var(--amp)}
+.sig ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.sig li{padding:10px 14px;border-radius:12px;background:var(--rail);font-size:15px}
+.quote{margin:0 0 12px;padding:12px 16px;border-left:3px solid var(--amp);background:var(--rail);border-radius:0 12px 12px 0}
+.quote p{margin:0;font-size:15px}.quote cite{display:block;margin-top:6px;font-style:normal;font-size:13px;color:var(--mute)}
+.exp{padding:14px 0;border-top:1px solid var(--rule)}.exp:first-of-type{border-top:0;padding-top:0}
+.act{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:22px 0}
+.compose{background:var(--surf);border:1px solid var(--rule);border-radius:20px;padding:20px;margin-bottom:22px;display:grid;gap:10px;max-width:660px}
+.compose label{font-weight:500}
+.compose textarea{min-height:112px;padding:12px 14px;font:300 16px/1.5 Sora,sans-serif;border:1px solid var(--rule);border-radius:12px;background:var(--bg);resize:vertical}
+.compose textarea[aria-invalid=true]{border-color:var(--fail);box-shadow:0 0 0 3px color-mix(in srgb,var(--fail) 20%,transparent)}
+.err{color:var(--fail);font-size:14px;margin:0}.hint{color:var(--mute);font-size:14px;margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);margin:6px 0 24px;overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:12px 16px;min-height:46px;cursor:pointer;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected=true]{color:var(--ink);border-color:var(--amp);font-weight:500}
+.cnt{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--rail);color:var(--mute);font-weight:400}
+.cnt.f{background:color-mix(in srgb,var(--fail) 16%,transparent);color:var(--fail)}
+.cnt.h{background:color-mix(in srgb,var(--hold) 16%,transparent);color:var(--hold)}
+.dl{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr);gap:12px 24px;margin:0}
+.dl dt{color:var(--mute);font-size:14px}.dl dd{margin:0}
+.lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px}
+.lists ul,.panel ul.plain,.panel ol{margin:6px 0 0;padding-left:20px}.lists li,.panel ol li,.panel ul.plain li{margin:6px 0}
+.md{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.65 ui-monospace,Consolas,monospace;background:var(--rail);padding:20px;border-radius:14px;margin:16px 0 0}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-bottom:18px}
+th{text-align:left;font-weight:400;color:var(--mute);font-size:14px;padding:8px 12px 8px 0;border-bottom:1px solid var(--rule)}
+td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:top}td.nw{white-space:nowrap}
+.cid{font-size:12px;color:var(--mute)}
+.cite{padding:12px 0;border-bottom:1px solid var(--rule)}.cite:last-child{border:0}
+.cite p{margin:4px 0 0;color:var(--mute);font-size:15px;max-width:72ch}
+.note{font-size:13px;color:var(--mute);margin-top:26px;max-width:80ch}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.sk{background:var(--ampsoft);border-radius:10px}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:14px;counter-reset:s}
+.steps li{display:flex;gap:12px;align-items:center;color:var(--mute)}
+.steps li::before{counter-increment:s;content:counter(s);flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--rule);display:grid;place-items:center;font-size:13px}
+.steps li.on{color:var(--ink);font-weight:500}.steps li.on::before{border-color:var(--amp);color:var(--amp);box-shadow:0 0 0 5px var(--ampsoft)}
+.steps li.ok{color:var(--ink)}.steps li.ok::before{content:"✓";background:var(--amp);border-color:var(--amp);color:var(--on)}
+.blank{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:center;max-width:800px;padding:clamp(24px,6vw,72px) 0}
+.blank svg{width:clamp(130px,20vw,190px)}
+.blank h2{font-size:clamp(24px,3vw,32px);font-weight:400;line-height:1.15;margin:0 0 10px}
+.blank p{color:var(--mute);margin:0 0 22px;max-width:50ch}
+.flow{list-style:none;padding:0;margin:0 0 24px;display:grid;gap:8px;font-size:15px}
+.flow li{display:flex;gap:10px;align-items:baseline}.flow b{color:var(--amp);font-weight:500;min-width:64px}
+.bloch .sph{fill:var(--ampsoft);stroke:var(--rule)}.bloch .eq{fill:none;stroke:var(--mute);stroke-dasharray:3 4}
+.bloch .vec{stroke:var(--amp);stroke-width:3;stroke-linecap:round}.bloch .tip{fill:var(--amp)}.bloch text{font:italic 16px "STIX Two Text",serif;fill:var(--mute)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 10px 10px 18px;border-radius:14px;display:flex;gap:14px;align-items:center;box-shadow:0 14px 34px -10px rgba(10,5,50,.5);max-width:calc(100% - 32px);z-index:10}
+.toast[hidden],.toast button[hidden]{display:none}
+.toast button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:36px;padding:0 8px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(max-width:1100px){.mode{display:none}}
+@media(max-width:760px){.nav{order:9;flex-basis:100%;margin:0}.board{grid-template-columns:1fr}.fringe{width:70%}.dl{grid-template-columns:1fr;gap:2px}.dl dd{margin-bottom:10px}}
+@media(max-width:900px){.shell{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.rail{padding:12px;overflow:visible}.foot{display:none}
+.q{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:6px;padding-bottom:4px}.q li{flex:0 0 228px;scroll-snap-align:start}}
+@media(max-width:600px){.blank{grid-template-columns:1fr}.disks{grid-template-columns:repeat(auto-fill,minmax(76px,1fr))}
+table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--rule)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:6.5em}.stack td::before{content:attr(data-l);float:inline-start;width:6em;margin-inline-start:-6.5em;color:var(--mute);font-size:13px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true" class="bloch"><circle cx="20" cy="20" r="17" class="sph"/><ellipse cx="20" cy="20" rx="17" ry="5.5" class="eq"/><line x1="20" y1="20" x2="29" y2="8" class="vec"/><circle cx="29" cy="8" r="3" class="tip"/></svg>
+    <h1>Overlap</h1><span class="ket" aria-label="claim overlap with simulation">⟨claim|sim⟩</span>
+  </div>
+  <nav class="nav" id="nav" aria-label="Workflow"></nav>
+  <label class="btn" for="file" id="uplabel">Upload papers</label>
+  <input class="vh" type="file" id="file" accept=".pdf,.docx,.txt" multiple>
+</header>
+<div class="shell">
+  <nav class="rail" aria-label="List"><h2 id="railh"></h2><ul class="q" id="q"></ul><div class="foot" id="foot"></div></nav>
+  <div class="pane" id="pane"><main id="main" aria-live="polite"></main></div>
+</div>
+<div class="toast" id="toast" hidden><span id="tmsg"></span><button id="undo">Undo</button></div>
+
+<script>
+{
+/* ---------- Streamlit component protocol (no build step) ---------- */
+const send=(type,extra)=>window.parent.postMessage(Object.assign({isStreamlitMessage:true,type},extra),'*');
+const emit=ev=>send('streamlit:setComponentValue',{value:Object.assign({eid:Math.random().toString(36).slice(2)+Date.now()},ev),dataType:'json'});
+
+const SECS={papers:{n:1,label:'Papers',rail:'Papers in the library'},gaps:{n:2,label:'Gaps',rail:'Gaps, most promising first'},
+  plans:{n:3,label:'Plans',rail:'Experiment plans'},proposals:{label:'Check a proposal',rail:'Proposals to check'}};
+const V={pass:['pass','Claims hold','|✓⟩'],fail:['fail',"Claims don't hold",'|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
+const VP={pass:['pass','Plan verified','|✓⟩'],fail:['fail','Plan fails verification','|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
+const DEC={pass:['Send to panel','Sent to panel'],fail:['Return to author','Returned to author'],hold:['Request details','Details requested']};
+const CS={pass:['pass','Pass'],fail:['fail','Fail'],hold:['hold','Inconclusive'],not:['done','Not run']};
+const TABS=[['verdict','Verdict'],['extracted','What we extracted'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
+const PTABS=[['plan','Plan'],['verdict','Verdict'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
+const STEPS={papers:['Reading the document','Finding limitations and future work','Extracting experiments','Indexing into the library'],
+  gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
+  plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
+  proposals:['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report']};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let D={papers:[],gaps:[],plans:[],proposals:[]},sec='papers',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
+  tab='verdict',ptab='plan',compose=null,err='',drafts={},localDec={},running={},last=null;
+const list=()=>[...(pending[sec]||[]),...D[sec]];
+const cur=()=>list().find(x=>x.id===sel[sec]);
+
+const fringe=(()=>{let r='';for(let i=0;i<140;i++){const o=Math.cos(i*.16)**2*Math.exp(-(((i-80)/40)**2))*.5;r+=`<rect x="${i*3}" y="0" width="3.2" height="150" fill="var(--amp)" opacity="${o.toFixed(3)}"/>`}
+  return `<svg class="fringe" viewBox="0 0 420 150" preserveAspectRatio="none" aria-hidden="true">${r}</svg>`})();
+const bloch=`<svg viewBox="0 0 120 130" class="bloch" aria-hidden="true"><circle cx="60" cy="62" r="52" class="sph"/><ellipse cx="60" cy="62" rx="52" ry="16" class="eq"/><line x1="60" y1="62" x2="60" y2="16" class="vec"/><circle cx="60" cy="14" r="5" class="tip"/><text x="68" y="12">|0⟩</text><text x="68" y="126">|1⟩</text></svg>`;
+
+/* ---------------------------------------------------------------- chrome */
+function renderNav(){
+  const counts={papers:D.papers.filter(p=>p.state!=='bad').length,gaps:D.gaps.length,plans:D.plans.length};
+  const step=k=>`<button data-sec="${k}" ${sec===k?'aria-current="page"':''}><span class="num">${SECS[k].n}</span>${SECS[k].label}${counts[k]?`<span class="cnt">${counts[k]}</span>`:''}</button>`;
+  $('#nav').innerHTML=`${step('papers')}<span class="arrow" aria-hidden="true">→</span>${step('gaps')}<span class="arrow" aria-hidden="true">→</span>${step('plans')}
+    <span class="sep" aria-hidden="true"></span><button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check a proposal</button>
+    <a id="dash" href="/dashboard">Full dashboard</a>`;
+  const up=$('#uplabel');up.hidden=!(sec==='papers'||sec==='proposals');up.textContent=sec==='proposals'?'Upload proposal':'Upload papers';
+  $('#file').multiple=sec==='papers';}
+const decided=p=>p.id in localDec?localDec[p.id]:!!p.dec;
+function pstatus(p){
+  if(p.state==='run'||running[p.id])return['run',sec==='papers'?'Analysing…':'Verifying…'];
+  if(p.state==='bad')return['fail','Couldn’t read file'];
+  if(sec==='plans')return VP[p.v];
+  if(decided(p))return['done',DEC[p.v][1]];
+  return V[p.v];}
+function row(p){
+  if(sec==='papers'){const [c,t]=p.state?pstatus(p):['pass',`${p.signals} gap signal${p.signals===1?'':'s'}`];
+    return `<span class="id">${esc(p.id)}${p.synthetic?'<span class="chip t-future_work">Synthetic</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${esc(t)}</span>`}
+  if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
+  const [c,t]=pstatus(p);
+  return `<span class="id">${esc(p.id)}${p.revision?'<span class="chip t-future_work">Revised</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span>`;}
+function renderRail(){
+  const l=list();$('#railh').textContent=SECS[sec].rail;
+  $('#q').innerHTML=l.length?l.map(p=>`<li><button data-id="${esc(p.id)}" aria-current="${p.id===sel[sec]}">${row(p)}</button></li>`).join('')
+    :`<li class="hint" style="padding:8px">${sec==='papers'?'No papers yet.':sec==='gaps'?'No gaps found yet.':sec==='plans'?'No plans yet.':'The queue is empty.'}</li>`;
+  const foot={papers:`<button class="link" data-act="sample_papers">Load sample papers</button><button class="link" data-act="clear_papers">Clear library</button>`,
+    gaps:D.papers.length?`<button class="link" data-act="find_gaps">Find gaps again</button>`:'',
+    plans:D.plans.length?`<button class="link" id="agenda2">Download research agenda</button>`:'',
+    proposals:`<button class="link" data-act="reload">Reload benchmark cases</button><button class="link" data-act="clear">Clear queue</button>`}[sec];
+  $('#foot').innerHTML=`<p class="keys"><kbd>J</kbd> <kbd>K</kbd> move through the list</p>${foot}<p class="keys" style="margin-top:8px">${esc(meta.mode||'')}</p>`;}
+
+/* --------------------------------------------------------- shared visuals */
+function disks(p){
+  const R=34;
+  return Object.keys(p.sim).sort().map(k=>{const s=p.sim[k],c=p.claim[k]??0,off=(k in p.claim)&&Math.abs(c-s)>p.tol,rs=Math.sqrt(s)*R,rc=Math.sqrt(c)*R,ph=(p.phase||{})[k]||0;
+    const L=Math.max(0,rs-3),x2=40-L*Math.sin(ph),y2=40-L*Math.cos(ph);
+    return `<figure class="disk ${off?'off':''}"><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="${R}" class="shell"/>
+    ${s>1e-9?`<circle cx="40" cy="40" r="${rs.toFixed(2)}" class="fill"/><line x1="40" y1="40" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" class="phase"/>`:''}
+    ${c>0?`<circle cx="40" cy="40" r="${rc.toFixed(2)}" class="ring"/>`:''}</svg>
+    <figcaption><span class="ket">|${esc(k)}⟩</span><span class="num">${s.toFixed(2)}</span><span class="cl">${k in p.claim?`${sec==='plans'?'predicted':'claimed'} ${c.toFixed(2)}`:'&nbsp;'}</span></figcaption></figure>`}).join('');}
+const sub=i=>`q<tspan dy="4" font-size="12">${i}</tspan>`;
+function circuit(p){
+  const gs=p.gates,n=p.n||1,hi=Math.max(n-1,...gs.flatMap(g=>g[1])),rows=hi+1;
+  const W=Math.max(300,96+gs.length*62+56,p.bad!=null&&gs[p.bad]&&gs[p.bad][1].some(q=>q>=n)?86+p.bad*62+200:0),H=rows*46+(hi>=n?22:8),y=i=>24+i*46;let s='';
+  for(let i=0;i<rows;i++){const g=i>=n;s+=`<line x1="40" x2="${W-(g?60:40)}" y1="${y(i)}" y2="${y(i)}" class="${g?'ghost':'wire'}"/><text x="6" y="${y(i)+5}" class="ql ${g?'bad':''}">${sub(i)}</text>`}
+  gs.forEach(([g,q],k)=>{const x=86+k*62,bad=k===p.bad;
+    if(q.length===2&&['CX','CNOT','CZ','SWAP'].includes(g)){const [a,b]=q,L=bad?'cb':'cl';
+      if(g==='SWAP')s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)}" class="${L}"/>${[a,b].map(t=>`<path d="M${x-7} ${y(t)-7}l14 14M${x+7} ${y(t)-7}l-14 14" class="${L}"/>`).join('')}`;
+      else if(g==='CZ')s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)}" class="${L}"/><circle cx="${x}" cy="${y(a)}" r="5" class="${bad?'dotb':'dot'}"/><circle cx="${x}" cy="${y(b)}" r="5" class="${bad?'dotb':'dot'}"/>`;
+      else s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)+12*Math.sign(b-a)}" class="${L}"/><circle cx="${x}" cy="${y(a)}" r="5" class="${bad?'dotb':'dot'}"/><circle cx="${x}" cy="${y(b)}" r="12" class="${bad?'tgtb':'tgt'}"/><line x1="${x-12}" x2="${x+12}" y1="${y(b)}" y2="${y(b)}" class="${L}"/><line x1="${x}" x2="${x}" y1="${y(b)-12}" y2="${y(b)+12}" class="${L}"/>`;
+      if(bad&&b>=n)s+=`<text x="${x+22}" y="${y(b)+22}" class="why">q${b} isn’t in the register</text>`;}
+    else{const a=q[0]??0,lab=g.length>3?g.slice(0,3):g;s+=`<rect x="${x-17}" y="${y(a)-16}" width="34" height="32" rx="7" class="gate ${bad?'b':''}"/><text x="${x}" y="${y(a)+5}" class="gl ${bad?'b':''}">${esc(lab)}</text>`}});
+  for(let i=0;i<n;i++){const x=W-40;s+=`<rect x="${x-15}" y="${y(i)-14}" width="30" height="28" rx="6" class="meter"/><path d="M${x-9} ${y(i)+6}a9 9 0 0 1 18 0" class="arc"/><line x1="${x}" y1="${y(i)+6}" x2="${x+6}" y2="${y(i)-6}" class="arc"/>`}
+  return `<svg viewBox="0 0 ${W} ${H}" style="max-width:${Math.round(W*1.3)}px" role="img" aria-label="Circuit: ${esc(gs.map(g=>g[0]+' '+g[1].join(' ')).join(', '))}">${s}</svg>`;}
+function overlap(p){
+  const th=Math.acos(Math.sqrt(Math.min(1,p.fid))),a0=62*Math.PI/180,L=110,O=[24,126];
+  const pt=a=>[O[0]+L*Math.cos(a),O[1]-L*Math.sin(a)],S=pt(a0),C=pt(a0-th),r=42,A1=[O[0]+r*Math.cos(a0),O[1]-r*Math.sin(a0)],A2=[O[0]+r*Math.cos(a0-th),O[1]-r*Math.sin(a0-th)];
+  const same=th<.01,deg=(th*180/Math.PI).toFixed(1),lab=sec==='plans'?'pred':'claim';
+  return `<svg viewBox="0 0 220 140" role="img" aria-label="Angle between ${lab} and simulated states: ${deg} degrees">
+   <line x1="${O[0]}" y1="${O[1]}" x2="210" y2="${O[1]}" class="ax"/><line x1="${O[0]}" y1="${O[1]}" x2="${O[0]}" y2="6" class="ax"/>
+   ${same?'':`<path d="M${O[0]} ${O[1]}L${A1[0]} ${A1[1]}A${r} ${r} 0 0 1 ${A2[0]} ${A2[1]}Z" class="ang"/>`}
+   <line x1="${O[0]}" y1="${O[1]}" x2="${S[0]}" y2="${S[1]}" class="vs"/>
+   <line x1="${O[0]}" y1="${O[1]}" x2="${C[0]}" y2="${C[1]}" class="vc ${same?'':'off'}"/>
+   ${same?`<text x="${S[0]+8}" y="${S[1]+4}">|${lab}⟩ = |sim⟩</text>`:`<text x="${S[0]-44}" y="${S[1]+6}">|sim⟩</text><text x="${C[0]+8}" y="${C[1]+6}">|${lab}⟩</text><text x="${O[0]+r+14}" y="${O[1]-10}" style="fill:var(--fail);font-style:normal;font-size:13px">θ ${deg}°</text>`}</svg>`;}
+const legend=p=>`<div class="legend"><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--amp)"/></svg>Simulated</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--ink)" stroke-dasharray="3 2"/></svg>${sec==='plans'?'Predicted':'Claimed'}</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--fail)" stroke-width="2" stroke-dasharray="3 2"/></svg>Outside ±${p.tol} tolerance</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--amp)"/><line x1="8" y1="8" x2="8" y2="2" stroke="var(--on)" stroke-width="2"/></svg>Phase</span></div>`;
+function picture(p){
+  if(p.sim)return `<div class="panel"><h3>Amplitudes by basis state</h3><p class="sub">Filled area is the simulated probability. The dashed ring is what ${sec==='plans'?'the plan predicts':'the author claims'}.</p>
+   <div class="disks">${disks(p)}</div>${legend(p)}${p.gates?`<div class="circ">${circuit(p)}</div>`:''}</div>`;
+  if(p.v==='hold'&&p.missing.length)return `<div class="panel"><h3>Missing</h3><p class="sub">Verification needs these before it can simulate anything.</p><ul class="missing">${p.missing.map(([s,a,b])=>`<li><span class="ket">${esc(s)}</span><div><b>${esc(a)}</b><span>${esc(b)}</span></div></li>`).join('')}</ul></div>`;
+  const ck=p.checks.find(c=>c[2]==='fail'||c[2]==='hold');
+  return `<div class="panel"><h3>Circuit as submitted</h3><p class="sub">The circuit failed its structural check, so it wasn’t simulated.</p>
+   ${p.gates?`<div class="circ">${circuit(p)}</div>`:''}${ck?`<p class="errbox" style="margin-top:16px">${esc(ck[3])}</p>`:''}</div>`;}
+function side(p){
+  const c=k=>p.checks.filter(x=>x[2]===k).length,pass=c('pass'),fail=c('fail'),not=c('not'),hold=p.checks.length-pass-fail-not;
+  const rest=[fail&&`${fail} failed`,hold&&`${hold} inconclusive`,not&&`${not} not run`].filter(Boolean).join(', ');
+  const lab=sec==='plans'?'pred':'claim';
+  const ov=p.fid!=null?`<div class="panel ov"><h3>State overlap</h3><div class="big ${p.fid<.999?'fail':''}">${p.fid.toFixed(3)}</div><span class="math">fidelity |⟨${lab}|sim⟩|²</span>${overlap(p)}
+    <p class="hint">${p.fid<.999?'The predicted state points away from what the circuit produces.':'The predicted state and the simulated state coincide.'} Computed from the outcome probabilities.</p></div>`:'';
+  return `<div class="side">${ov}<div class="panel">
+    <div class="fg"><span>Total variation distance</span><b class="${p.tvd!=null&&p.tvd>p.tol?'fail':''}">${p.tvd!=null?p.tvd.toFixed(3)+' / '+p.tol:'Not simulated'}</b></div>
+    <div class="fg"><span>Checks passed</span><b>${pass} of ${p.checks.length}</b></div>
+    ${rest?`<div class="fg"><span>Other checks</span><b style="font-weight:400">${rest}</b></div>`:''}
+    <div class="fg"><span>Qubits</span><b>${p.n??'Not stated'}</b></div></div></div>`;}
+const litClass=s=>/support/i.test(s)?'pass':/contradict/i.test(s)?'fail':'done';
+const compClass=s=>/^verified/i.test(s)?'pass':/contradict/i.test(s)?'fail':'done';
+function extracted(p){
+  const x=p.spec||{fields:[],lists:[]};
+  return `<p class="hint" style="margin-bottom:16px">What the system read from the document. If something looks wrong, fix it in the full dashboard and re-verify.</p>
+  <div class="panel"><dl class="dl">${x.fields.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>
+  <div class="lists">${x.lists.map(([k,arr])=>`<div class="panel"><h3>${esc(k)}</h3>${arr.length?`<ul>${arr.map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`:'<p class="hint" style="margin-top:6px">None stated.</p>'}</div>`).join('')}</div>`;}
+const checksTab=p=>`<p class="hint" style="margin-bottom:12px">Each rule the ${sec==='plans'?'plan':'proposal'} was audited against, and what it found.</p><table class="stack"><thead><tr><th>Check</th><th>Result</th><th>What it found</th></tr></thead><tbody>
+  ${p.checks.map(([id,n,s,d])=>`<tr><td>${esc(n)}<div class="cid">${esc(id)}</div></td><td class="nw"><span class="st ${CS[s][0]}">${CS[s][1]}</span></td><td>${esc(d)}</td></tr>`).join('')}</tbody></table>`;
+const evidenceTab=p=>`<h3 style="font-size:16px;margin:0 0 4px">Claims</h3><p class="hint" style="margin-bottom:10px">Each claim, checked against the literature and against the simulation.</p>
+  ${p.claims.length?`<table class="stack"><thead><tr><th>Claim</th><th>Literature</th><th>Simulation</th></tr></thead><tbody>
+  ${p.claims.map(([t,l,s])=>`<tr><td>${esc(t)}</td><td class="nw"><span class="st ${litClass(l)}">${esc(l)}</span></td><td><span class="st ${compClass(s)}">${esc(s)}</span></td></tr>`).join('')}</tbody></table>`:'<p class="hint">No discrete claims were extracted.</p>'}
+  <h3 style="font-size:16px;margin:28px 0 4px">Literature found</h3><p class="hint" style="margin-bottom:6px">Closest passages in the library.</p>
+  ${p.cites.length?p.cites.map(([s,pg,sc,t])=>`<div class="cite"><b>${esc(s)}</b>${pg?`<span class="hint">, p. ${esc(pg)}</span>`:''} <span class="hint">match ${esc(sc)}</span><p>${esc(t)}</p></div>`).join(''):'<p class="hint">No matching passages in the library.</p>'}`;
+const reportTab=p=>`<div class="row"><button class="btn primary" id="dlmd">Download Markdown report</button><button class="btn" id="copy">Copy report JSON</button><button class="btn" id="rerun">Re-run verification</button></div><pre class="md">${esc(p.md)}</pre>`;
+function tabBar(defs,active,counts){
+  return `<div class="tabs" role="tablist" aria-label="Sections">${defs.map(([k,l])=>{const n=counts[k];return `<button role="tab" id="t-${k}" data-tab="${k}" aria-controls="tp" aria-selected="${active===k}" tabindex="${active===k?0:-1}">${l}${n?`<span class="cnt ${n[1]}">${esc(n[0])}</span>`:''}</button>`}).join('')}</div>`;}
+function checkCounts(p){
+  const failN=p.checks.filter(x=>x[2]==='fail').length,holdN=p.checks.filter(x=>x[2]==='hold').length;
+  return {checks:failN?[`${failN} failed`,'f']:holdN?[`${holdN} unclear`,'h']:[`${p.checks.length}`,''],evidence:[`${p.claims.length+p.cites.length}`,'']};}
+
+/* ---------------------------------------------------------- Papers view */
+function paperView(p){
+  const sig=(ket,label,arr,hint)=>`<div class="sig"><h4><span class="ket">${ket}</span>${label}<span class="cnt">${arr.length}</span></h4>${arr.length?`<ul>${arr.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:`<p class="hint">${hint}</p>`}</div>`;
+  const gapsBtn=D.gaps.length?`<button class="btn" data-sec="gaps">View ${D.gaps.length} gaps</button><button class="btn" data-act="find_gaps">Find gaps again</button>`:`<button class="btn primary" data-act="find_gaps">Find research gaps</button>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span><span>${esc(p.analysed_by)}</span>${p.synthetic?'<span class="chip t-future_work">Synthetic sample paper</span>':''}</div>
+  <h2>${esc(p.title)}</h2><p class="lead">${esc(p.objective)}</p>
+  <div class="act">${gapsBtn}<button class="btn" data-act="remove_paper">Remove paper</button></div></section>
+  <section class="board"><div class="panel"><h3>Gap signals</h3><p class="sub">Sentences where the authors say what they didn’t do. The gap finder starts here.</p>
+    <div class="signals">${sig('−','Limitations',p.limitations,'None stated.')}${sig('→','Future work',p.future_work,'None stated.')}${sig('?','Open questions',p.open_questions,'None stated.')}</div></div>
+   <div class="side"><div class="panel"><h3>At a glance</h3>
+    <div class="fg"><span>Platforms</span><b style="font-weight:400">${esc(p.systems.join(', ')||'Not identified')}</b></div>
+    <div class="fg"><span>Methods</span><b style="font-weight:400">${esc(p.frameworks.join(', ')||'Not identified')}</b></div>
+    <div class="fg"><span>Experiments</span><b>${p.experiments.length}</b></div>
+    ${p.doi?`<div class="fg"><span>DOI</span><b style="font-weight:400">${esc(p.doi)}</b></div>`:''}</div>
+    ${p.contributions.length?`<div class="panel"><h3>What it reports</h3><ul class="plain">${p.contributions.slice(0,4).map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`:''}</div></section>
+  ${p.experiments.length?`<div class="stack-gap"><div class="panel"><h3>Experiments in the paper</h3>${p.experiments.map(e=>`<div class="exp"><b>${esc(e.title)}</b>
+    <p class="hint">${esc([e.system,e.n?`${e.n} qubits`:null].filter(Boolean).join(', '))}${e.outcomes?`. Reported ${esc(e.outcomes)}`:''}</p>
+    ${e.gates&&e.n?`<div class="circ">${circuit({gates:e.gates,n:e.n,bad:null})}</div>`:''}${e.findings?`<p class="hint" style="margin-top:8px">${esc(e.findings)}</p>`:''}</div>`).join('')}</div></div>`:''}
+  ${p.claims.length?`<div class="stack-gap"><div class="panel"><h3>Claims</h3><ul class="plain">${p.claims.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div></div>`:''}`;}
+
+/* ------------------------------------------------------------ Gaps view */
+function gapView(g){
+  const meter=(label,v,why)=>`<div class="meterrow"><div class="hd"><span>${label}</span><b>${v.toFixed(2)}</b></div><div class="bar"><i style="width:${Math.round(v*100)}%"></i></div><p>${why}</p></div>`;
+  const act=g.plan_id?`<button class="btn primary" data-goto="plans:${esc(g.plan_id)}">Open ${esc(g.plan_id)}</button><button class="btn" data-act="plan_gap">Plan another experiment</button>`
+    :`<button class="btn primary" data-act="plan_gap">Plan an experiment</button>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(g.id)}</span><span class="chip t-${g.type}">${esc(g.type_label)}</span><span>Supported by ${g.papers} paper${g.papers===1?'':'s'}</span></div>
+  <h2>${esc(g.title)}</h2><p class="lead">${esc(g.statement)}</p><div class="act">${act}</div></section>
+  <section class="board"><div class="panel"><h3>Evidence from the literature</h3><p class="sub">Every gap is backed by what the papers actually say.</p>
+    ${g.evidence.map(e=>`<blockquote class="quote"><p>${esc(e.quote)}</p><cite>${esc(e.paper)}${e.page?`, p. ${esc(e.page)}`:''}</cite></blockquote>`).join('')}</div>
+   <div class="side"><div class="panel"><h3>Why it ranks here</h3><div class="big">${g.priority.toFixed(2)}</div><span class="math" style="display:block;color:var(--mute);margin:4px 0 8px">priority</span>
+    ${meter('Novelty',g.novelty,'How little of the wider library already covers this.')}
+    ${meter('Evidence',g.evidence_strength,'How many papers and quotes point to it.')}
+    ${meter('Feasibility',g.feasibility,g.testable?'Can be tested with a small circuit on the simulator.':'Needs more than a small simulated circuit.')}</div>
+    <div class="panel"><div class="fg"><span>Circuit family</span><b style="font-weight:400">${esc(g.family||'Not specific')}</b></div>
+     <div class="fg"><span>Target platform</span><b style="font-weight:400">${esc(g.target||'Same as source')}</b></div>
+     <div class="fg"><span>Testable here</span><b style="font-weight:400">${g.testable?'Yes':'No'}</b></div></div></div></section>`;}
+
+/* ------------------------------------------------- Plan / proposal view */
+function verdictView(p){
+  const isPlan=sec==='plans',[c,t,k]=(isPlan?VP:V)[p.v];
+  if(isPlan){
+    const pl=p.plan;
+    const counts=checkCounts(p);
+    const body={plan:()=>`<section class="board"><div class="panel"><h3>Hypothesis</h3><p style="font-size:18px;margin:6px 0 16px">${esc(pl.hypothesis)}</p>
+        <h3>Method</h3><ol>${pl.method.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+        <h3 style="margin-top:18px">Why this addresses the gap</h3><p class="hint">${esc(pl.rationale)}</p></div>
+       <div class="side"><div class="panel"><h3>Variables</h3><dl class="dl" style="grid-template-columns:1fr;gap:2px">${pl.variables.map(([k2,v2])=>`<dt>${esc(k2)}</dt><dd style="margin-bottom:8px">${esc(v2)}</dd>`).join('')}</dl></div>
+        <div class="panel"><h3>Success metrics</h3><ul class="plain">${pl.metrics.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div></div></section>
+       <div class="stack-gap board"><div class="panel"><h3>Risks</h3><ul class="plain">${pl.risks.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>
+        <div class="panel"><h3>Baseline and resources</h3><p class="hint" style="margin-top:6px">${esc(pl.baseline)}</p><p class="hint">${esc(pl.resources)}</p></div></div>`,
+      verdict:()=>`<section class="board">${picture(p)}${side(p)}</section>`,checks:()=>checksTab(p),evidence:()=>evidenceTab(p),report:()=>reportTab(p)};
+    return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><button class="link" style="padding:0;min-height:0" data-goto="gaps:${esc(p.gap_id)}">Addresses ${esc(p.gap_id)}: ${esc(p.gap_title)}</button><span>${p.generated_by==='llm'?'Written by the model':'Template plan'}</span></div>
+      <div class="tag ${c}"><span class="ket">${k}</span>${t}</div><h2>${esc(p.title)}</h2><p class="lead">${esc(p.head)}</p>
+      <div class="act"><button class="btn primary" id="agenda">Download research agenda</button><button class="btn" id="dlmd">Download plan report</button><button class="btn" id="rerun">Re-verify</button></div></section>
+      ${p.revision?`<p class="callout"><b>Revised once after verification.</b> ${esc(p.revision_note||'')}</p>`:''}
+      ${tabBar(PTABS,ptab,counts)}<div role="tabpanel" id="tp" aria-labelledby="t-${ptab}">${body[ptab]()}</div>
+      <p class="note">Report ${esc(p.report_id)}. Verification covers ideal statevector simulation only; review the plan before running it on hardware.</p>`;}
+  const [act]=DEC[p.v],dec=decided(p);
+  const comp=compose===p.id?`<form class="compose" id="cf" novalidate>
+    <label for="msg">${p.v==='fail'?'What should the author fix?':'What does the author need to add?'}</label>
+    <textarea id="msg" aria-describedby="msgh" ${err?'aria-invalid="true"':''} placeholder="${p.v==='fail'?'e.g. Revise the expected distribution or the circuit so they agree.':'e.g. State the register size, the gate sequence and the expected outcome probabilities.'}">${esc(drafts[p.id]||'')}</textarea>
+    ${err?`<p class="err" id="msgh">${err}</p>`:`<p class="hint" id="msgh">The check log goes with your note.</p>`}
+    <div class="row"><button class="btn primary ${c}" type="submit">${act}</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>`:'';
+  const actions=dec?`<div class="act"><span class="hint">${DEC[p.v][1]}.</span><button class="btn" id="reopen">Reopen</button></div>`
+   :compose===p.id?'':`<div class="act"><button class="btn primary ${c}" id="go">${act}</button><button class="btn" id="dlmd">Download report</button></div>`;
+  const counts=Object.assign(checkCounts(p),{extracted:p.missing.length?[`${p.missing.length} missing`,'h']:null});
+  const body={verdict:()=>`<section class="board">${picture(p)}${side(p)}</section>`,extracted:()=>extracted(p),checks:()=>checksTab(p),evidence:()=>evidenceTab(p),report:()=>reportTab(p)};
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span><span>${esc(p.when)}</span></div>
+  <div class="tag ${c}"><span class="ket">${k}</span>${t}</div><h2>${esc(p.head)}</h2>${actions}</section>${comp}
+  ${tabBar(TABS,tab,counts)}<div role="tabpanel" id="tp" aria-labelledby="t-${tab}">${body[tab]()}</div>
+  <p class="note">Report ${esc(p.report_id)}. A pass covers ideal statevector simulation only; expert review is still required before running on hardware.</p>`;}
+
+/* --------------------------------------------------- loading / empty / error */
+function loadingView(title,file,steps,step){
+  const i=Math.min(step||0,steps.length-1);
+  return `<section class="hero">${fringe}<div class="meta">${file?`<span>${esc(file)}</span>`:''}</div>
+  <div class="tag run"><span class="ket">|ψ⟩</span>Working</div><h2>${esc(title)}</h2><div class="sk pulse" style="height:20px;max-width:420px;margin-top:14px"></div></section>
+  <section class="board"><div class="panel"><ol class="steps" aria-label="Progress">${steps.map((s,j)=>`<li class="${j<i?'ok':j===i?'on':''}">${s}${j===i?'…':''}</li>`).join('')}</ol></div>
+   <div class="panel"><div class="sk pulse" style="height:14px;width:60%;margin-bottom:10px"></div><div class="sk pulse" style="height:30px;width:40%;margin-bottom:22px"></div><div class="sk pulse" style="height:14px;width:70%;margin-bottom:10px"></div><div class="sk pulse" style="height:14px;width:50%"></div></div></section>`;}
+function errorView(p){
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span></div>
+  <div class="tag fail"><span class="ket">|∅⟩</span>Not read</div><h2>Couldn’t read ${esc(p.file)}</h2></section>
+  <div class="panel" style="max-width:640px"><p style="margin-top:0">${esc(p.why)}</p>
+  <div class="row"><label class="btn primary" for="file">Upload another file</label><button class="btn" data-act="${sec==='papers'?'remove_paper':'remove'}">Remove from list</button></div></div>`;}
+function blank(){
+  if(sec==='papers')return `<div class="blank">${bloch}<div><h2>Find what’s missing in the quantum literature</h2>
+    <p>Add papers and Overlap reads them, finds research gaps across them, and designs experiments to fill those gaps, each checked by simulation.</p>
+    <ul class="flow"><li><b>Papers</b>limitations, future work and experiments are extracted</li><li><b>Gaps</b>ranked by novelty, evidence and feasibility</li><li><b>Plans</b>a hypothesis, method and circuit, verified on a simulator</li></ul>
+    <div class="row"><label class="btn primary" for="file">Upload papers</label><button class="btn" data-act="sample_papers">Load 4 sample papers</button></div>
+    <p class="hint" style="margin-top:12px">Sample papers are synthetic, written to demonstrate the method.</p></div></div>`;
+  if(sec==='gaps')return D.papers.length?`<div class="blank">${bloch}<div><h2>Ready to look for gaps</h2><p>${D.papers.length} paper${D.papers.length===1?'':'s'} in the library. The gap finder compares them for unstated combinations, scale limits, conflicting results and what the authors left open.</p>
+    <div class="row"><button class="btn primary" data-act="find_gaps">Find research gaps</button></div></div></div>`
+    :`<div class="blank">${bloch}<div><h2>No papers to analyse yet</h2><p>Gaps are found across papers, so add some first.</p><div class="row"><button class="btn primary" data-sec="papers">Go to papers</button></div></div></div>`;
+  if(sec==='plans')return `<div class="blank">${bloch}<div><h2>No experiment plans yet</h2><p>Open a gap and choose “Plan an experiment”. Each plan is simulated and audited straight away.</p>
+    <div class="row"><button class="btn primary" data-sec="gaps">Go to gaps</button></div></div></div>`;
+  return `<div class="blank">${bloch}<div><h2>No proposals waiting for review</h2><p>Upload a single experiment proposal to check its circuit and claims directly.</p>
+  <div class="row"><label class="btn primary" for="file">Upload proposal</label><button class="btn" id="sample">Try the sample Bell-state PDF</button><button class="btn" data-act="reload">Load benchmark cases</button></div></div></div>`;}
+function render(){
+  renderNav();renderRail();const p=cur();let html;
+  if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,STEPS[sec],busy.step);
+  else if(!p)html=blank();
+  else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
+  else if(p.state==='bad')html=errorView(p);
+  else html=sec==='papers'?paperView(p):sec==='gaps'?gapView(p):verdictView(p);
+  $('#main').innerHTML=html;}
+
+function toast(msg,undo){$('#tmsg').textContent=msg;$('#undo').hidden=!undo;last=undo;$('#toast').hidden=false;
+  clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').hidden=true,5000);}
+setInterval(()=>{let ch=false;const bump=o=>{if(o&&(o.step||0)<9){o.step=(o.step||0)+1;ch=true}};
+  [...pending.papers,...pending.proposals,...Object.values(running)].forEach(bump);bump(busy);if(ch)render();},900);
+function go(s,id){sec=s;if(id)sel[s]=id;if(!list().some(x=>x.id===sel[s]))sel[s]=list()[0]?.id;compose=null;err='';render();$('#pane').scrollTop=0;}
+function download(text,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/markdown'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);}
+
+/* ---------- data in from Python ---------- */
+window.addEventListener('message',e=>{
+  const d=e.data;if(!d||d.type!=='streamlit:render')return;
+  const a=d.args||{};meta=a.meta||{};
+  if(d.theme&&d.theme.base)document.documentElement.dataset.theme=d.theme.base;
+  D={papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[]};
+  const done=new Set(meta.done||[]);
+  pending.papers=pending.papers.filter(p=>!done.has(p.token));pending.proposals=pending.proposals.filter(p=>!done.has(p.token));
+  for(const id in running){const it=D[running[id].sec].find(x=>x.id===id);if(!it||it.report_id!==running[id].was){delete running[id];if(it)toast('Verification re-run')}}
+  for(const id in localDec){const it=D.proposals.find(x=>x.id===id);if(!it||!!it.dec===localDec[id])delete localDec[id]}
+  if(meta.seq!==lastSeq){
+    const first=lastSeq===null;lastSeq=meta.seq;busy=null;
+    const f=a.focus||{};
+    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab='plan';$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
+  }
+  for(const s of Object.keys(D)){const l=[...(pending[s]||[]),...D[s]];if(!l.some(x=>x.id===sel[s]))sel[s]=l[0]?.id;}
+  render();});
+
+/* ---------- events out to Python ---------- */
+function upload(files){
+  const token='u'+Date.now(),ok=['pdf','docx','txt'];
+  if(sec==='proposals'){const f=files[0];const ext=(f.name.split('.').pop()||'').toLowerCase();
+    pending.proposals.unshift({id:'New',title:f.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '),file:f.name,state:'run',step:0,token});sel.proposals='New';render();
+    if(!ok.includes(ext)){emit({kind:'upload',token,name:f.name,b64:''});return}
+    const r=new FileReader();r.onload=()=>emit({kind:'upload',token,name:f.name,b64:String(r.result).split(',')[1]||''});r.readAsDataURL(f);return}
+  files.forEach((f,i)=>pending.papers.unshift({id:`New ${i+1}`,title:f.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '),file:f.name,state:'run',step:0,token}));
+  sel.papers=pending.papers[0].id;render();
+  Promise.all(files.map(f=>new Promise(res=>{if(f.size>25e6||!ok.includes((f.name.split('.').pop()||'').toLowerCase()))return res({name:f.name,b64:'',size:f.size});
+    const r=new FileReader();r.onload=()=>res({name:f.name,b64:String(r.result).split(',')[1]||'',size:f.size});r.readAsDataURL(f);})))
+    .then(arr=>emit({kind:'upload_papers',token,files:arr}));}
+function act(kind){
+  const p=cur();
+  if(kind==='find_gaps'){busy={sec:'gaps',title:'Finding research gaps',step:0};sec='gaps';render();emit({kind});return}
+  if(kind==='plan_gap'){busy={sec:'plans',title:`Planning an experiment for ${p.id}`,file:p.title,step:0};const gid=p.id;sec='plans';render();emit({kind,gap_id:gid});return}
+  if(kind==='sample_papers'){const token='s'+Date.now();['A','B','C','D'].forEach((x,i)=>pending.papers.push({id:`New ${i+1}`,title:`Sample paper ${x}`,file:'synthetic sample',state:'run',step:0,token}));
+    sec='papers';sel.papers=pending.papers[0].id;render();emit({kind,token});return}
+  if(kind==='remove_paper'||kind==='remove'){emit({kind,id:p.id});return}
+  emit({kind});}
+function decide(p,val,note){localDec[p.id]=val;emit({kind:'decide',id:p.id,dec:val,note:note||''});render();}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button,a');if(!t)return;
+  const p=cur();
+  if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
+  if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.goto){const [s,id]=t.dataset.goto.split(':');go(s,id);return}
+  if(t.dataset.act){act(t.dataset.act);return}
+  if(t.dataset.id){sel[sec]=t.dataset.id;compose=null;err='';render();$('#pane').scrollTop=0;return}
+  if(t.dataset.tab){if(sec==='plans')ptab=t.dataset.tab;else tab=t.dataset.tab;render();$(`#t-${t.dataset.tab}`)?.focus();return}
+  switch(t.id){
+    case 'sample':{const token='s'+Date.now();pending.proposals.unshift({id:'New',title:'sample bell state proposal',file:'sample_bell_state_proposal.pdf',state:'run',step:0,token});sel.proposals='New';render();emit({kind:'sample',token});break}
+    case 'go':
+      if(p.v==='pass'){decide(p,true);toast('Sent to panel',()=>decide(p,false))}
+      else{compose=p.id;err='';render();$('#msg').focus()}break;
+    case 'cancel':compose=null;err='';render();break;
+    case 'reopen':decide(p,false);break;
+    case 'rerun':running[p.id]={id:p.id,file:p.file,step:0,was:p.report_id,sec};emit({kind:sec==='plans'?'reverify':'rerun',id:p.id});render();break;
+    case 'copy':Promise.resolve().then(()=>navigator.clipboard.writeText(p.json)).then(()=>toast('Report JSON copied'),()=>toast('Couldn’t copy: the browser blocked clipboard access'));break;
+    case 'dlmd':download(p.md,`${p.report_id}.md`);break;
+    case 'agenda':case 'agenda2':download(meta.agenda||'# Research agenda\n\nNo content yet.','research_agenda.md');break;
+    case 'undo':$('#toast').hidden=true;last&&last();break;}
+});
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,textarea')||e.metaKey||e.ctrlKey)return;
+  if(e.target.dataset&&e.target.dataset.tab&&(e.key==='ArrowRight'||e.key==='ArrowLeft')){
+    const defs=sec==='plans'?PTABS:TABS,curT=sec==='plans'?ptab:tab,i=defs.findIndex(x=>x[0]===curT),n=(i+(e.key==='ArrowRight'?1:-1)+defs.length)%defs.length;
+    if(sec==='plans')ptab=defs[n][0];else tab=defs[n][0];render();$(`#t-${defs[n][0]}`)?.focus();e.preventDefault();return}
+  const l=list(),k=e.key.toLowerCase();if(!l.length||(k!=='j'&&k!=='k'))return;
+  const i=l.findIndex(x=>x.id===sel[sec]),n=Math.min(l.length-1,Math.max(0,i+(k==='j'?1:-1)));
+  if(n!==i){sel[sec]=l[n].id;render();$('#pane').scrollTop=0;document.querySelector(`[data-id="${CSS.escape(l[n].id)}"]`)?.focus()}});
+document.addEventListener('input',e=>{if(e.target.id==='msg'){drafts[sel[sec]]=e.target.value;
+  if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
+document.addEventListener('submit',e=>{e.preventDefault();const p=cur(),v=(drafts[p.id]||'').trim();
+  if(v.length<20){err=v?`Add ${20-v.length} more characters so the author knows what to change.`:'Add a note so the author knows what to change.';render();$('#msg').focus();return}
+  compose=null;err='';decide(p,true,v);toast(DEC[p.v][1],()=>decide(p,false));});
+$('#file').addEventListener('change',e=>{const fs=[...e.target.files];if(fs.length)upload(fs);e.target.value='';});
+
+render();
+send('streamlit:componentReady',{apiVersion:1});
+send('streamlit:setFrameHeight',{height:window.innerHeight||900});
+}
+</script>
+</body>
+</html>

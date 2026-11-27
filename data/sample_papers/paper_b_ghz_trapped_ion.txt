@@ -1,0 +1,25 @@
+Deterministic GHZ State Preparation in a Trapped Ion Register
+
+SYNTHETIC SAMPLE PAPER: written to demonstrate the research-gap pipeline. Not a real publication.
+
+Abstract
+We demonstrate deterministic preparation of the three-qubit Greenberger-Horne-Zeilinger state in a linear chain of trapped ion qubits. Cascaded entangling gates produce the expected tripartite correlations with high contrast.
+
+Methodology
+Three 171Yb+ ions are confined in a linear Paul trap. Entangling operations use Molmer-Sorensen interactions compiled to CNOT-equivalent gates. Populations are read out with state-dependent fluorescence.
+
+Experiment 1: Three-qubit GHZ state on a 3-qubit register
+We prepare the GHZ state on 3 qubits. H gate on qubit 0, then CX gate on qubits 0, 1, then CX gate on qubits 1, 2.
+We measured P(000) = 0.5 and P(111) = 0.5, with a parity contrast of 0.93.
+
+Results
+We observed a GHZ fidelity of 93% for the trapped ion chain. We demonstrate that cascaded entangling gates scale linearly in depth with register size.
+
+Limitations
+We only demonstrate GHZ preparation up to 3 qubits; beyond 3 qubits the motional-mode crosstalk was not characterised. The protocol is restricted to trapped ion hardware.
+
+Open Questions
+It remains open whether comparable GHZ fidelities can be reached on superconducting transmon devices. It is unknown whether the linear depth scaling holds for 4 or more qubits.
+
+References
+[1] Greenberger, Horne, Shimony and Zeilinger, Bell's theorem without inequalities.

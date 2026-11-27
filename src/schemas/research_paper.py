@@ -46,7 +46,13 @@ class ResearchPaperAnalysis(BaseModel):
     
     results_and_findings: List[str] = Field(default_factory=list, description="Key experimental results, findings, and conclusions")
     limitations: List[str] = Field(default_factory=list, description="Stated limitations, noise impacts, decoherence, or architectural limits")
-    
+
+    # Signals consumed by the research-gap finder
+    key_contributions: List[str] = Field(default_factory=list, description="What the paper claims to contribute")
+    future_work: List[str] = Field(default_factory=list, description="Directions the authors explicitly leave for future work")
+    open_questions: List[str] = Field(default_factory=list, description="Questions the paper states remain open or unresolved")
+    key_claims: List[str] = Field(default_factory=list, description="Quantitative or qualitative claims made by the authors")
+
     # Traceable Provenance & Warnings
     evidence_and_citations: List[Dict[str, Any]] = Field(default_factory=list, description="Traceable literature evidence matching knowledge base")
     raw_text: Optional[str] = Field(default=None, description="Raw document text")
