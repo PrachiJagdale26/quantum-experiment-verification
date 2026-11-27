@@ -1,6 +1,27 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) **done 2026-11-27**. Next: Phase 2 (literature collection).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Next: Phase 3 (research analysis).
+
+Phase 2 results:
+- **`src/literature/`.** Collectors for OpenAlex, arXiv, Crossref and Semantic Scholar share one base: a per-source rate limiter (arXiv 3.1 s between requests), retries on 429/5xx, and an on-disk response cache for a week, with API keys excluded from cache keys.
+  - OpenAlex supports search, DOI, author, by-id and citing-works lookups.
+  - Crossref keyword search is restricted to journal articles, proceedings, posted content and chapters; it otherwise returns peer-review records and theses.
+- **Metadata normalisation:** DOI, versioned arXiv ids, titles (LaTeX, HTML and accents removed), OpenAlex inverted abstracts and JATS markup.
+- **De-duplication:** DOI → arXiv id → OpenAlex id → fuzzy title (year within one, same first author). Records with different DOIs or arXiv ids are never merged.
+  - The journal DOI is preferred over an arXiv DataCite DOI.
+  - arXiv and published versions are recorded with dates.
+  - Disagreeing identifiers are kept and reported, never overwritten.
+- **Ingestion:** every search is a `SearchRun` with its status (ok, cached, rate-limited, failed), counts and the total available at the source; hits are stored with their ranks.
+  - Metadata-only records are kept and flagged.
+  - Abstracts are indexed into the knowledge base.
+  - Full text is fetched only from arXiv (open access), one paper at a time on request.
+- **UI:** a Literature step (first in the flow) with topic presets, years, sources, results per source and DOI lookup, a per-source collection report and search history.
+  - The rail filters by text, availability, source and year.
+  - The detail view shows identifiers, retrieval times, versions, availability and work type, plus a "Preprint or repository deposit" marker.
+- **Live check:** "quantum error mitigation" since 2019, 15 per source: 45 results became 41 unique publications in 6.4 s, with 4 cross-source merges, 3 metadata-only records and no identifier conflicts.
+  - Semantic Scholar is rate-limited without a key, and recorded as such.
+  - "Entanglement and decoherence" since 2020, 10 per source, gave 27 unique publications. Its top OpenAlex hit was a speculative Zenodo deposit, which is now marked as a preprint rather than filtered out. Corpus curation is a researcher decision (Phase 3).
+- **Tests:** 21 literature tests on captured real API responses (offline); 105 offline tests pass in total.
 
 Phase 1 results:
 - **Dependencies installed:** chromadb 1.5.9, sentence-transformers 6.3.0, pymupdf 2.2, qiskit-aer 0.18.4, rank-bm25, rapidfuzz, reportlab, langgraph-checkpoint-sqlite.

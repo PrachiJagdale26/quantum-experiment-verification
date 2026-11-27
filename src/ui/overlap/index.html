@@ -181,6 +181,14 @@ td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:t
 .toast[hidden],.toast button[hidden]{display:none}
 .toast button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:36px;padding:0 8px}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.in{width:100%;min-height:42px;padding:8px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--surf);font:300 15px Sora,sans-serif;color:var(--ink)}
+.in:focus{outline:2px solid var(--amp);outline-offset:1px}
+.lf{display:grid;gap:6px;margin:0 4px 8px}.lf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.form{display:grid;gap:8px;align-content:start}.form label{font-size:14px;font-weight:400}.form .lf-row label{display:block;margin-bottom:4px}
+.srcs{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;margin:6px 0;display:grid;gap:6px}.srcs legend{font-size:14px;padding:0 6px}
+.chk{display:flex;gap:8px;align-items:center;min-height:32px}.chk input{width:18px;height:18px;accent-color:var(--amp)}
+.hold.chip,.chip.hold{color:var(--hold)}.pass.chip,.chip.pass{color:var(--pass)}
+a{color:var(--amp)}
 @media(max-width:1100px){.mode{display:none}}
 @media(max-width:760px){.nav{order:9;flex-basis:100%;margin:0}.board{grid-template-columns:1fr}.fringe{width:70%}.dl{grid-template-columns:1fr;gap:2px}.dl dd{margin-bottom:10px}}
 @media(max-width:900px){.shell{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.rail{padding:12px;overflow:visible}.foot{display:none}
@@ -201,7 +209,7 @@ table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-bl
   <input class="vh" type="file" id="file" accept=".pdf,.docx,.txt" multiple>
 </header>
 <div class="shell">
-  <nav class="rail" aria-label="List"><h2 id="railh"></h2><ul class="q" id="q"></ul><div class="foot" id="foot"></div></nav>
+  <nav class="rail" aria-label="List"><h2 id="railh"></h2><div id="railf"></div><ul class="q" id="q"></ul><div class="foot" id="foot"></div></nav>
   <div class="pane" id="pane"><main id="main" aria-live="polite"></main></div>
 </div>
 <div class="toast" id="toast" hidden><span id="tmsg"></span><button id="undo">Undo</button></div>
@@ -212,24 +220,39 @@ table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-bl
 const send=(type,extra)=>window.parent.postMessage(Object.assign({isStreamlitMessage:true,type},extra),'*');
 const emit=ev=>send('streamlit:setComponentValue',{value:Object.assign({eid:Math.random().toString(36).slice(2)+Date.now()},ev),dataType:'json'});
 
-const SECS={papers:{n:1,label:'Papers',rail:'Papers in the library'},gaps:{n:2,label:'Gaps',rail:'Gaps, most promising first'},
-  plans:{n:3,label:'Plans',rail:'Experiment plans'},proposals:{label:'Check a proposal',rail:'Proposals to check'}};
+const SECS={literature:{n:1,label:'Literature',rail:'Literature in the database'},papers:{n:2,label:'Papers',rail:'Papers in the library'},
+  gaps:{n:3,label:'Gaps',rail:'Gaps, most promising first'},plans:{n:4,label:'Plans',rail:'Experiment plans'},
+  proposals:{label:'Check a proposal',rail:'Proposals to check'}};
+const AVAIL={full_text:['pass','Full text'],abstract:['t-future_work','Abstract'],metadata_only:['hold','Metadata only']};
+const SRC_LABEL={openalex:'OpenAlex',arxiv:'arXiv',crossref:'Crossref',semantic_scholar:'Semantic Scholar'};
 const V={pass:['pass','Claims hold','|✓⟩'],fail:['fail',"Claims don't hold",'|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
 const VP={pass:['pass','Plan verified','|✓⟩'],fail:['fail','Plan fails verification','|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
 const DEC={pass:['Send to panel','Sent to panel'],fail:['Return to author','Returned to author'],hold:['Request details','Details requested']};
 const CS={pass:['pass','Pass'],fail:['fail','Fail'],hold:['hold','Inconclusive'],not:['done','Not run']};
 const TABS=[['verdict','Verdict'],['extracted','What we extracted'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
 const PTABS=[['plan','Plan'],['verdict','Verdict'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
-const STEPS={papers:['Reading the document','Finding limitations and future work','Extracting experiments','Indexing into the library'],
+const STEPS={literature:['Querying OpenAlex','Querying arXiv (3 s between requests, as arXiv asks)','Querying Crossref','Merging duplicates across sources','Saving to the research database'],
+  papers:['Reading the document','Finding limitations and future work','Extracting experiments','Indexing into the library'],
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
   plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
   proposals:['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report']};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-let D={papers:[],gaps:[],plans:[],proposals:[]},sec='papers',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
-  tab='verdict',ptab='plan',compose=null,err='',drafts={},localDec={},running={},last=null;
-const list=()=>[...(pending[sec]||[]),...D[sec]];
+let D={literature:[],papers:[],gaps:[],plans:[],proposals:[]},sec='literature',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
+  tab='verdict',ptab='plan',compose=null,err='',drafts={},localDec={},running={},last=null,
+  litMode='collect',railSec=null,
+  litForm={topic:'noise_mitigation',query:'',year_from:'',year_to:'',limit:'25',sources:['openalex','arxiv','crossref'],doi:''},
+  litFilter={text:'',source:'',availability:'',year_from:'',year_to:''};
+function litMatches(p){
+  const f=litFilter,t=f.text.trim().toLowerCase();
+  if(t&&!(`${p.title} ${p.abstract||''} ${(p.authors||[]).join(' ')}`.toLowerCase().includes(t)))return false;
+  if(f.source&&!p.sources.some(s=>s.name===f.source))return false;
+  if(f.availability&&p.availability!==f.availability)return false;
+  if(f.year_from&&!(p.year>=+f.year_from))return false;
+  if(f.year_to&&!(p.year<=+f.year_to))return false;
+  return true;}
+const list=()=>sec==='literature'?D.literature.filter(litMatches):[...(pending[sec]||[]),...D[sec]];
 const cur=()=>list().find(x=>x.id===sel[sec]);
 
 const fringe=(()=>{let r='';for(let i=0;i<140;i++){const o=Math.cos(i*.16)**2*Math.exp(-(((i-80)/40)**2))*.5;r+=`<rect x="${i*3}" y="0" width="3.2" height="150" fill="var(--amp)" opacity="${o.toFixed(3)}"/>`}
@@ -238,9 +261,10 @@ const bloch=`<svg viewBox="0 0 120 130" class="bloch" aria-hidden="true"><circle
 
 /* ---------------------------------------------------------------- chrome */
 function renderNav(){
-  const counts={papers:D.papers.filter(p=>p.state!=='bad').length,gaps:D.gaps.length,plans:D.plans.length};
+  const counts={literature:D.literature.length,papers:D.papers.filter(p=>p.state!=='bad').length,gaps:D.gaps.length,plans:D.plans.length};
   const step=k=>`<button data-sec="${k}" ${sec===k?'aria-current="page"':''}><span class="num">${SECS[k].n}</span>${SECS[k].label}${counts[k]?`<span class="cnt">${counts[k]}</span>`:''}</button>`;
-  $('#nav').innerHTML=`${step('papers')}<span class="arrow" aria-hidden="true">→</span>${step('gaps')}<span class="arrow" aria-hidden="true">→</span>${step('plans')}
+  const arrow='<span class="arrow" aria-hidden="true">→</span>';
+  $('#nav').innerHTML=`${step('literature')}${arrow}${step('papers')}${arrow}${step('gaps')}${arrow}${step('plans')}
     <span class="sep" aria-hidden="true"></span><button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check a proposal</button>
     <a id="dash" href="/dashboard">Full dashboard</a>`;
   const up=$('#uplabel');up.hidden=!(sec==='papers'||sec==='proposals');up.textContent=sec==='proposals'?'Upload proposal':'Upload papers';
@@ -253,17 +277,36 @@ function pstatus(p){
   if(decided(p))return['done',DEC[p.v][1]];
   return V[p.v];}
 function row(p){
+  if(sec==='literature'){const [c,l]=AVAIL[p.availability];
+    return `<span class="id">${esc(p.year||'n.d.')}<span class="chip ${c}">${l}</span></span><span class="t">${esc(p.title)}</span>
+      <span class="st done">${esc(p.sources.map(s=>SRC_LABEL[s.name]||s.name).join(', '))}</span>`}
   if(sec==='papers'){const [c,t]=p.state?pstatus(p):['pass',`${p.signals} gap signal${p.signals===1?'':'s'}`];
     return `<span class="id">${esc(p.id)}${p.synthetic?'<span class="chip t-future_work">Synthetic</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${esc(t)}</span>`}
   if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
     <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
   const [c,t]=pstatus(p);
   return `<span class="id">${esc(p.id)}${p.revision?'<span class="chip t-future_work">Revised</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span>`;}
-function renderRail(){
-  const l=list();$('#railh').textContent=SECS[sec].rail;
+function renderRailFilters(){
+  // Rendered only when the section changes, so typing in a filter never loses focus.
+  if(railSec===sec)return;railSec=sec;
+  const f=litFilter,sel_=(v,cur)=>v===cur?'selected':'';
+  $('#railf').innerHTML=sec!=='literature'?'':`<div class="lf">
+    <label class="vh" for="lf-text">Filter papers</label><input id="lf-text" class="in" type="search" placeholder="Filter by title, abstract, author" value="${esc(f.text)}">
+    <div class="lf-row"><label class="vh" for="lf-avail">Availability</label><select id="lf-avail" class="in"><option value="">Availability</option>
+      ${Object.entries(AVAIL).map(([k,[,l]])=>`<option value="${k}" ${sel_(k,f.availability)}>${l}</option>`).join('')}</select>
+      <label class="vh" for="lf-src">Source</label><select id="lf-src" class="in"><option value="">Source</option>
+      ${Object.entries(SRC_LABEL).map(([k,l])=>`<option value="${k}" ${sel_(k,f.source)}>${l}</option>`).join('')}</select></div>
+    <div class="lf-row"><label class="vh" for="lf-y1">From year</label><input id="lf-y1" class="in" inputmode="numeric" placeholder="From year" value="${esc(f.year_from)}">
+      <label class="vh" for="lf-y2">To year</label><input id="lf-y2" class="in" inputmode="numeric" placeholder="To year" value="${esc(f.year_to)}"></div></div>`;}
+function renderList(){
+  const l=list();
   $('#q').innerHTML=l.length?l.map(p=>`<li><button data-id="${esc(p.id)}" aria-current="${p.id===sel[sec]}">${row(p)}</button></li>`).join('')
-    :`<li class="hint" style="padding:8px">${sec==='papers'?'No papers yet.':sec==='gaps'?'No gaps found yet.':sec==='plans'?'No plans yet.':'The queue is empty.'}</li>`;
-  const foot={papers:`<button class="link" data-act="sample_papers">Load sample papers</button><button class="link" data-act="clear_papers">Clear library</button>`,
+    :`<li class="hint" style="padding:8px">${sec==='literature'?(D.literature.length?'No papers match the filters.':'Nothing collected yet.'):sec==='papers'?'No papers yet.':sec==='gaps'?'No gaps found yet.':sec==='plans'?'No plans yet.':'The queue is empty.'}</li>`;
+  if(sec==='literature')$('#railh').textContent=`${SECS[sec].rail} (${l.length}${l.length!==D.literature.length?` of ${D.literature.length}`:''})`;}
+function renderRail(){
+  $('#railh').textContent=SECS[sec].rail;renderRailFilters();renderList();
+  const foot={literature:`<button class="link" data-litmode="collect">Collect more literature</button>`,
+    papers:`<button class="link" data-act="sample_papers">Load sample papers</button><button class="link" data-act="clear_papers">Clear library</button>`,
     gaps:D.papers.length?`<button class="link" data-act="find_gaps">Find gaps again</button>`:'',
     plans:D.plans.length?`<button class="link" id="agenda2">Download research agenda</button>`:'',
     proposals:`<button class="link" data-act="reload">Reload benchmark cases</button><button class="link" data-act="clear">Clear queue</button>`}[sec];
@@ -415,6 +458,67 @@ function verdictView(p){
   <p class="note">Report ${esc(p.report_id)}. A pass covers ideal statevector simulation only; expert review is still required before running on hardware.</p>`;}
 
 /* --------------------------------------------------- loading / empty / error */
+/* ------------------------------------------------------ Literature views */
+const statusClass=s=>({ok:'pass',cached:'pass',rate_limited:'hold',failed:'fail',skipped:'done'}[s]||'done');
+const statusLabel=s=>({ok:'OK',cached:'From cache',rate_limited:'Rate-limited',failed:'Failed',skipped:'Skipped'}[s]||s);
+function collectPanel(){
+  const f=litForm,topics=meta.topics||[],rep=meta.lit_report,runs=meta.search_runs||[];
+  const topic=topics.find(t=>t.key===f.topic);
+  const srcBox=(k,label,note)=>`<label class="chk"><input type="checkbox" name="src" value="${k}" ${f.sources.includes(k)?'checked':''}> ${label}${note?` <span class="hint">${note}</span>`:''}</label>`;
+  const report=rep?`<div class="panel"><h3>Last collection</h3><p class="sub">“${esc(rep.query)}”${rep.filters.year_from||rep.filters.year_to?`, ${esc(rep.filters.year_from||'…')}–${esc(rep.filters.year_to||'…')}`:''}. ${rep.unique} unique papers, ${rep.new} new to the database, ${rep.merged} matched papers already stored.</p>
+    <table class="stack"><thead><tr><th>Source</th><th>Status</th><th>Returned</th><th>New</th><th>Already stored</th><th>Available at source</th></tr></thead><tbody>
+    ${rep.outcomes.map(o=>`<tr><td>${esc(SRC_LABEL[o.source]||o.source)}</td><td class="nw"><span class="st ${statusClass(o.status)}">${statusLabel(o.status)}</span>${o.error?`<div class="cid">${esc(o.error)}</div>`:''}</td>
+      <td>${o.returned}</td><td>${o.new}</td><td>${o.merged}</td><td>${o.total_available!=null?Number(o.total_available).toLocaleString():'Not reported'}</td></tr>`).join('')}</tbody></table></div>`:'';
+  const history=runs.length?`<details class="sec"><summary>Search history (${runs.length} most recent)</summary><table class="stack"><thead><tr><th>When</th><th>Source</th><th>Query</th><th>Status</th><th>Returned</th></tr></thead><tbody>
+    ${runs.map(r=>`<tr><td class="nw">${esc(r.at)}</td><td>${esc(SRC_LABEL[r.source]||r.source)}</td><td>${esc(r.query)}</td><td class="nw"><span class="st ${statusClass(r.status)}">${statusLabel(r.status)}</span></td><td>${r.returned}</td></tr>`).join('')}</tbody></table></details>`:'';
+  return `<section class="hero">${fringe}<h2>Collect quantum physics literature</h2>
+    <p class="lead">Search scholarly databases and store what they return, with source links and retrieval times. Nothing is invented: when a source has no abstract, the paper is kept and marked metadata only.</p></section>
+  <div class="board"><form class="panel form" id="litform" novalidate>
+    <h3>Search</h3>
+    <label for="lit-topic">Research area</label>
+    <select id="lit-topic" class="in">${topics.map(t=>`<option value="${esc(t.key)}" ${t.key===f.topic?'selected':''}>${esc(t.label)}</option>`).join('')}<option value="" ${!f.topic?'selected':''}>Custom query</option></select>
+    <label for="lit-query">Query</label>
+    <input id="lit-query" class="in" placeholder="${esc(topic?topic.query:'e.g. GHZ state fidelity superconducting')}" value="${esc(f.query)}">
+    <p class="hint">Leave empty to use the research area’s query. Put phrases in "quotes".</p>
+    <div class="lf-row"><div><label for="lit-y1">From year</label><input id="lit-y1" class="in" inputmode="numeric" value="${esc(f.year_from)}" placeholder="Any"></div>
+      <div><label for="lit-y2">To year</label><input id="lit-y2" class="in" inputmode="numeric" value="${esc(f.year_to)}" placeholder="Any"></div>
+      <div><label for="lit-limit">Per source</label><select id="lit-limit" class="in">${['10','25','50','100'].map(n=>`<option ${n===f.limit?'selected':''}>${n}</option>`).join('')}</select></div></div>
+    <fieldset class="srcs"><legend>Sources</legend>${srcBox('openalex','OpenAlex',meta.openalex_key?'':'(shared daily budget without a key)')}${srcBox('arxiv','arXiv')}
+      ${srcBox('crossref','Crossref')}${srcBox('semantic_scholar','Semantic Scholar',meta.s2_key?'':'(often rate-limited without a key)')}</fieldset>
+    <p class="err" id="lit-err" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Collect papers</button></div></form>
+   <div class="side"><form class="panel form" id="doiform" novalidate><h3>Add one paper by DOI</h3>
+      <label for="lit-doi">DOI</label><input id="lit-doi" class="in" placeholder="10.1038/s41586-023-06505-7" value="${esc(f.doi)}">
+      <p class="err" id="doi-err" hidden></p><div class="row"><button class="btn" type="submit">Look up</button></div></form>
+    <div class="panel"><h3>In the database</h3>
+      <div class="fg"><span>Papers</span><b>${D.literature.length}</b></div>
+      <div class="fg"><span>With abstract</span><b>${D.literature.filter(p=>p.availability!=='metadata_only').length}</b></div>
+      <div class="fg"><span>Metadata only</span><b>${D.literature.filter(p=>p.availability==='metadata_only').length}</b></div>
+      <div class="fg"><span>Full text</span><b>${D.literature.filter(p=>p.availability==='full_text').length}</b></div></div></div></div>
+  <div class="stack-gap">${report}</div>${history}`;}
+function litView(p){
+  const [c,l]=AVAIL[p.availability],authors=p.authors.join(', ')+(p.author_count>p.authors.length?` and ${p.author_count-p.authors.length} more`:'');
+  const link=(href,text)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`:'';
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc([p.venue,p.date||p.year].filter(Boolean).join(', '))}</span><span class="chip ${c}">${l}</span>${p.is_open_access?'<span class="chip pass">Open access</span>':''}
+    ${p.preprint_only?'<span class="chip hold" title="No journal or conference version recorded">Preprint or repository deposit</span>':''}${(p.work_types||[]).length?`<span>Type: ${esc(p.work_types.join(', '))}</span>`:''}</div>
+    <h2>${esc(p.title)}</h2><p class="lead">${esc(authors||'Authors not listed by the source')}</p>
+    <div class="act">${p.source_url?`<a class="btn primary" href="${esc(p.source_url)}" target="_blank" rel="noopener noreferrer">Open source page</a>`:''}
+      ${p.pdf_url?`<a class="btn" href="${esc(p.pdf_url)}" target="_blank" rel="noopener noreferrer">Open PDF</a>`:''}
+      ${p.arxiv_id&&p.availability!=='full_text'?`<button class="btn" data-act="lit_fulltext">Get full text from arXiv</button>`:''}
+      <button class="btn" data-litmode="collect">Collect more literature</button></div></section>
+  <section class="board"><div class="panel"><h3>Abstract</h3>
+    ${p.abstract?`<p class="sub">From ${esc(SRC_LABEL[p.abstract_source]||p.abstract_source||'source')}, verbatim.</p><p style="margin:0;max-width:72ch">${esc(p.abstract)}</p>`
+      :`<p class="errbox" style="color:var(--hold);background:color-mix(in srgb,var(--hold) 10%,transparent)">No source returned an abstract for this paper, so only its metadata is stored. It can be cited but not analysed until the abstract or full text is available.</p>`}
+    ${p.availability==='full_text'?`<p class="hint" style="margin-top:14px">Full text: ${p.fulltext_pages||'?'} pages, downloaded from arXiv (open access) and indexed in the knowledge base.</p>`:''}</div>
+   <div class="side"><div class="panel"><h3>Identifiers</h3>
+      <div class="fg"><span>DOI</span><b style="font-weight:400">${p.doi?link('https://doi.org/'+p.doi,p.doi):'None recorded'}</b></div>
+      <div class="fg"><span>arXiv</span><b style="font-weight:400">${p.arxiv_id?link('https://arxiv.org/abs/'+p.arxiv_id,p.arxiv_id):'None recorded'}</b></div>
+      <div class="fg"><span>OpenAlex</span><b style="font-weight:400">${p.openalex_id?link('https://openalex.org/'+p.openalex_id,p.openalex_id):'None recorded'}</b></div>
+      ${p.cited_by!=null?`<div class="fg"><span>Cited by</span><b>${p.cited_by}</b></div>`:''}
+      ${p.references?`<div class="fg"><span>References</span><b>${p.references}</b></div>`:''}</div>
+    <div class="panel"><h3>Retrieved from</h3>${p.sources.map(s=>`<div class="fg"><span>${link(s.url,SRC_LABEL[s.name]||s.name)||esc(SRC_LABEL[s.name]||s.name)}</span><b style="font-weight:400">${esc(s.retrieved_at)} UTC</b></div>`).join('')}</div>
+    ${p.versions.length?`<div class="panel"><h3>Versions</h3>${p.versions.map(v=>`<div class="fg"><span>${link(v.url,v.label)||esc(v.label)}</span><b style="font-weight:400">${esc(v.date||'date not given')}</b></div>`).join('')}</div>`:''}
+    ${p.conflicts.length?`<div class="panel"><h3>Identifier conflicts</h3><p class="hint">Sources disagreed; the first value was kept.</p>${p.conflicts.map(x=>`<p class="cid">${esc(JSON.stringify(x))}</p>`).join('')}</div>`:''}</div></section>`;}
 function loadingView(title,file,steps,step){
   const i=Math.min(step||0,steps.length-1);
   return `<section class="hero">${fringe}<div class="meta">${file?`<span>${esc(file)}</span>`:''}</div>
@@ -442,6 +546,7 @@ function blank(){
 function render(){
   renderNav();renderRail();const p=cur();let html;
   if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,STEPS[sec],busy.step);
+  else if(sec==='literature')html=(litMode==='collect'||!p)?collectPanel():litView(p);
   else if(!p)html=blank();
   else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
   else if(p.state==='bad')html=errorView(p);
@@ -460,7 +565,7 @@ window.addEventListener('message',e=>{
   const d=e.data;if(!d||d.type!=='streamlit:render')return;
   const a=d.args||{};meta=a.meta||{};
   if(d.theme&&d.theme.base)document.documentElement.dataset.theme=d.theme.base;
-  D={papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[]};
+  D={literature:a.literature||[],papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[]};
   const done=new Set(meta.done||[]);
   pending.papers=pending.papers.filter(p=>!done.has(p.token));pending.proposals=pending.proposals.filter(p=>!done.has(p.token));
   for(const id in running){const it=D[running[id].sec].find(x=>x.id===id);if(!it||it.report_id!==running[id].was){delete running[id];if(it)toast('Verification re-run')}}
@@ -468,7 +573,8 @@ window.addEventListener('message',e=>{
   if(meta.seq!==lastSeq){
     const first=lastSeq===null;lastSeq=meta.seq;busy=null;
     const f=a.focus||{};
-    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab='plan';$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
+    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab='plan';
+      if(f.sec==='literature')litMode=f.id?'detail':'collect';$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
   }
   for(const s of Object.keys(D)){const l=[...(pending[s]||[]),...D[s]];if(!l.some(x=>x.id===sel[s]))sel[s]=l[0]?.id;}
   render();});
@@ -492,6 +598,7 @@ function act(kind){
   if(kind==='sample_papers'){const token='s'+Date.now();['A','B','C','D'].forEach((x,i)=>pending.papers.push({id:`New ${i+1}`,title:`Sample paper ${x}`,file:'synthetic sample',state:'run',step:0,token}));
     sec='papers';sel.papers=pending.papers[0].id;render();emit({kind,token});return}
   if(kind==='remove_paper'||kind==='remove'){emit({kind,id:p.id});return}
+  if(kind==='lit_fulltext'){busy={sec:'literature',title:'Downloading the open-access PDF from arXiv',file:p.title,step:0};render();emit({kind,id:p.id});return}
   emit({kind});}
 function decide(p,val,note){localDec[p.id]=val;emit({kind:'decide',id:p.id,dec:val,note:note||''});render();}
 
@@ -500,9 +607,10 @@ document.addEventListener('click',e=>{
   const p=cur();
   if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
   if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.litmode){litMode=t.dataset.litmode;render();$('#pane').scrollTop=0;return}
   if(t.dataset.goto){const [s,id]=t.dataset.goto.split(':');go(s,id);return}
   if(t.dataset.act){act(t.dataset.act);return}
-  if(t.dataset.id){sel[sec]=t.dataset.id;compose=null;err='';render();$('#pane').scrollTop=0;return}
+  if(t.dataset.id){sel[sec]=t.dataset.id;if(sec==='literature')litMode='detail';compose=null;err='';render();$('#pane').scrollTop=0;return}
   if(t.dataset.tab){if(sec==='plans')ptab=t.dataset.tab;else tab=t.dataset.tab;render();$(`#t-${t.dataset.tab}`)?.focus();return}
   switch(t.id){
     case 'sample':{const token='s'+Date.now();pending.proposals.unshift({id:'New',title:'sample bell state proposal',file:'sample_bell_state_proposal.pdf',state:'run',step:0,token});sel.proposals='New';render();emit({kind:'sample',token});break}
@@ -518,16 +626,41 @@ document.addEventListener('click',e=>{
     case 'undo':$('#toast').hidden=true;last&&last();break;}
 });
 document.addEventListener('keydown',e=>{
-  if(e.target.closest('input,textarea')||e.metaKey||e.ctrlKey)return;
+  if(e.target.closest('input,textarea,select')||e.metaKey||e.ctrlKey)return;
   if(e.target.dataset&&e.target.dataset.tab&&(e.key==='ArrowRight'||e.key==='ArrowLeft')){
     const defs=sec==='plans'?PTABS:TABS,curT=sec==='plans'?ptab:tab,i=defs.findIndex(x=>x[0]===curT),n=(i+(e.key==='ArrowRight'?1:-1)+defs.length)%defs.length;
     if(sec==='plans')ptab=defs[n][0];else tab=defs[n][0];render();$(`#t-${defs[n][0]}`)?.focus();e.preventDefault();return}
   const l=list(),k=e.key.toLowerCase();if(!l.length||(k!=='j'&&k!=='k'))return;
   const i=l.findIndex(x=>x.id===sel[sec]),n=Math.min(l.length-1,Math.max(0,i+(k==='j'?1:-1)));
   if(n!==i){sel[sec]=l[n].id;render();$('#pane').scrollTop=0;document.querySelector(`[data-id="${CSS.escape(l[n].id)}"]`)?.focus()}});
+/* Literature form and filters: values live in state so re-renders never wipe what was typed. */
+const LIT_FIELDS={'lit-topic':'topic','lit-query':'query','lit-y1':'year_from','lit-y2':'year_to','lit-limit':'limit','lit-doi':'doi'};
+const FILTER_FIELDS={'lf-text':'text','lf-avail':'availability','lf-src':'source','lf-y1':'year_from','lf-y2':'year_to'};
+document.addEventListener('input',e=>{
+  const id=e.target.id;
+  if(FILTER_FIELDS[id]){litFilter[FILTER_FIELDS[id]]=e.target.value;renderList();return}
+  if(LIT_FIELDS[id]){litForm[LIT_FIELDS[id]]=e.target.value;if(id==='lit-topic'){const q=$('#lit-query'),t=(meta.topics||[]).find(x=>x.key===e.target.value);if(q)q.placeholder=t?t.query:'e.g. GHZ state fidelity superconducting'}return}
+  if(e.target.name==='src'){litForm.sources=[...document.querySelectorAll('input[name=src]:checked')].map(x=>x.value);return}
+});
+function litSubmit(form){
+  const showErr=(id,msg)=>{const el=$(id);el.textContent=msg;el.hidden=!msg;};
+  if(form.id==='doiform'){
+    const doi=litForm.doi.trim();
+    if(!/^(https?:\/\/(dx\.)?doi\.org\/|doi:)?10\.\d{4,9}\/\S+$/i.test(doi)){showErr('#doi-err','That doesn’t look like a DOI. It starts with 10. followed by a slash, e.g. 10.1038/s41586-023-06505-7.');$('#lit-doi').focus();return}
+    busy={sec:'literature',title:'Looking up the DOI in OpenAlex and Crossref',file:doi,step:0};render();emit({kind:'lit_doi',doi});return}
+  const f=litForm,yr=v=>v===''||/^(19|20)\d{2}$/.test(v.trim());
+  if(!f.query.trim()&&!f.topic){showErr('#lit-err','Enter a query or choose a research area.');$('#lit-query').focus();return}
+  if(!yr(f.year_from)||!yr(f.year_to)){showErr('#lit-err','Years must be four digits, e.g. 2019.');return}
+  if(f.year_from&&f.year_to&&+f.year_from>+f.year_to){showErr('#lit-err','“From year” is after “To year”.');return}
+  if(!f.sources.length){showErr('#lit-err','Choose at least one source.');return}
+  const topic=(meta.topics||[]).find(t=>t.key===f.topic);
+  busy={sec:'literature',title:'Collecting papers',file:`“${f.query.trim()||(topic?topic.query:'')}” from ${f.sources.map(s=>SRC_LABEL[s]).join(', ')}`,step:0};render();
+  emit({kind:'lit_collect',query:f.query.trim(),topic:f.topic,year_from:f.year_from.trim(),year_to:f.year_to.trim(),limit:f.limit,sources:f.sources});}
 document.addEventListener('input',e=>{if(e.target.id==='msg'){drafts[sel[sec]]=e.target.value;
   if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
-document.addEventListener('submit',e=>{e.preventDefault();const p=cur(),v=(drafts[p.id]||'').trim();
+document.addEventListener('submit',e=>{e.preventDefault();
+  if(e.target.id==='litform'||e.target.id==='doiform'){litSubmit(e.target);return}
+  const p=cur(),v=(drafts[p.id]||'').trim();
   if(v.length<20){err=v?`Add ${20-v.length} more characters so the author knows what to change.`:'Add a note so the author knows what to change.';render();$('#msg').focus();return}
   compose=null;err='';decide(p,true,v);toast(DEC[p.v][1],()=>decide(p,false));});
 $('#file').addEventListener('change',e=>{const fs=[...e.target.files];if(fs.length)upload(fs);e.target.value='';});

@@ -47,9 +47,10 @@ MISSING = {
 
 
 def overlap(papers: List[Dict[str, Any]], gaps: List[Dict[str, Any]], plans: List[Dict[str, Any]],
-            proposals: List[Dict[str, Any]], focus: Optional[Dict[str, Any]], meta: Dict[str, Any], key: str = "overlap"):
-    """Render the Papers -> Gaps -> Plans app (plus single-proposal checking). Returns the latest UI event."""
-    return _overlap_component(papers=papers, gaps=gaps, plans=plans, proposals=proposals,
+            proposals: List[Dict[str, Any]], focus: Optional[Dict[str, Any]], meta: Dict[str, Any],
+            literature: Optional[List[Dict[str, Any]]] = None, key: str = "overlap"):
+    """Render the Literature -> Papers -> Gaps -> Plans app (plus single-proposal checking). Returns the latest UI event."""
+    return _overlap_component(literature=literature or [], papers=papers, gaps=gaps, plans=plans, proposals=proposals,
                               focus=focus, meta=meta, key=key, default=None)
 
 
@@ -320,3 +321,52 @@ def build_plan_view(plan: ExperimentPlan, report: VerificationReport, gap_title:
         },
     })
     return v
+
+
+# ----------------------------------------------------------------------------------
+# Literature Explorer views (Module 1)
+# ----------------------------------------------------------------------------------
+def build_publication_view(pub) -> Dict[str, Any]:
+    """A stored Publication, with its provenance and availability stated explicitly."""
+    meta = pub.raw_metadata or {}
+    by_source = meta.get("by_source", {})
+    availability = "full_text" if pub.full_text_available else ("abstract" if pub.abstract else "metadata_only")
+    authors = list(pub.authors or [])
+    return {
+        "id": f"PUB-{pub.id}",
+        "db_id": pub.id,
+        "title": pub.title,
+        "year": pub.year,
+        "date": pub.publication_date,
+        "venue": pub.venue,
+        "authors": authors[:12],
+        "author_count": len(authors),
+        "doi": pub.doi,
+        "arxiv_id": pub.arxiv_id,
+        "openalex_id": pub.openalex_id,
+        "abstract": pub.abstract,
+        "abstract_source": pub.abstract_source,
+        "availability": availability,
+        "is_open_access": bool(pub.is_open_access),
+        "source_url": pub.source_url,
+        "pdf_url": pub.pdf_url,
+        "sources": [{"name": name, "url": info.get("source_url"), "retrieved_at": (info.get("retrieved_at") or "")[:16].replace("T", " "),
+                     "cited_by": info.get("cited_by_count"), "type": info.get("type")} for name, info in by_source.items()],
+        "versions": [{"label": v.version_label, "date": v.version_date, "url": v.source_url}
+                     for v in sorted(pub.versions, key=lambda v: v.version_date or "")],
+        "references": len(meta.get("referenced_works", [])),
+        "cited_by": max([i.get("cited_by_count") or 0 for i in by_source.values()] or [0]) or None,
+        "conflicts": meta.get("identifier_conflicts", []),
+        "fulltext_pages": meta.get("fulltext_pages"),
+        # Work type as the sources report it (article, preprint, posted-content, ...), so a reader can tell
+        # peer-reviewed articles from repository deposits; nothing is filtered out on the system's judgement.
+        "work_types": sorted({str(i.get("type")).replace("-", " ") for i in by_source.values() if i.get("type")}),
+        # No DOI other than a repository DOI (arXiv 10.48550, Zenodo 10.5281) -> no journal/conference version recorded.
+        "preprint_only": not (pub.doi and not pub.doi.startswith(("10.48550/", "10.5281/"))),
+    }
+
+
+def build_search_runs_view(runs) -> List[Dict[str, Any]]:
+    return [{"id": r.id, "source": r.source, "query": r.query, "status": r.status, "returned": r.result_count,
+             "total": r.total_available, "error": r.error, "at": r.started_at.strftime("%Y-%m-%d %H:%M") if r.started_at else ""}
+            for r in runs]

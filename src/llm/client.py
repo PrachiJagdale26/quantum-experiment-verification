@@ -447,11 +447,20 @@ class ConfigurableLLMClient:
             # If primary model has 503 high demand spike, probe active fallback to confirm key & network
             elif any(term in err_str for term in ("503", "UNAVAILABLE", "high demand", "504", "DEADLINE_EXCEEDED")):
                 try:
-                    fb_resp = client.models.generate_content(
-                        model="gemini-3.6-flash",
-                        contents=probe_prompt
-                    )
-                    actual_model_used = f"{self._model} (Catalog Verified; 503 Spike -> Active Fallback Gemini 3.6 Flash Responded)"
+                    # Probe the same configured fallbacks the app uses for real calls.
+                    fallbacks = [m.strip() for m in os.getenv(
+                        "GEMINI_FALLBACK_MODELS", "gemini-flash-latest,gemini-flash-lite-latest,gemini-3.1-flash-lite"
+                    ).split(",") if m.strip() and m.strip() != self._model]
+                    fb_resp, fb_last_err = None, None
+                    for fb_model in fallbacks:
+                        try:
+                            fb_resp = client.models.generate_content(model=fb_model, contents=probe_prompt)
+                            actual_model_used = f"{self._model} (busy, 503) -> fallback {fb_model} responded"
+                            break
+                        except Exception as one_err:
+                            fb_last_err = one_err
+                    if fb_resp is None:
+                        raise fb_last_err or RuntimeError("No fallback model configured")
                     response_text = fb_resp.text.strip() if fb_resp and fb_resp.text else "OK"
                 except Exception as fb_err:
                     fb_str = str(fb_err)

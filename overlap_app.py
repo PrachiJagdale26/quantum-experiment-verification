@@ -28,7 +28,9 @@ from src.llm.client import ConfigurableLLMClient
 from src.llm.extractor import ProposalExtractor
 from src.research import ExperimentPlanner, GapFinder, PaperIngestError, PaperLibrary, ResearchPipeline
 from src.schemas.proposal import ProposalSpecification
-from src.ui.overlap_view import build_gap_view, build_paper_view, build_plan_view, build_view, overlap
+from src.literature import TOPICS, LiteratureIngestor, list_publications, recent_search_runs
+from src.ui.overlap_view import (build_gap_view, build_paper_view, build_plan_view, build_publication_view,
+                                 build_search_runs_view, build_view, overlap)
 from src.verification.engine import VerificationEngine
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
@@ -64,9 +66,16 @@ def get_services():
     return kb, llm, engine, ProposalExtractor(llm), DocumentExtractor(), mode
 
 
+@st.cache_resource(show_spinner=False)
+def get_ingestor(_kb):
+    """One literature ingestor per server: collectors share rate limits and the HTTP cache."""
+    return LiteratureIngestor(kb=_kb)
+
+
 def research_page():
     st.markdown(REVIEW_CSS, unsafe_allow_html=True)
     kb, llm, engine, extractor, doc_extractor, mode = get_services()
+    ingestor = get_ingestor(kb)
     ss = st.session_state
 
     if "pipeline" not in ss:
@@ -140,7 +149,30 @@ def research_page():
             ss.queue = []
         find = lambda i: next((x for x in (ss.queue or []) if x["id"] == i), None)
 
-        if kind == "upload_papers":
+        if kind == "lit_collect":
+            sources = [x for x in ev.get("sources") or [] if x in ("openalex", "arxiv", "crossref", "semantic_scholar")]
+            to_int = lambda v: int(v) if str(v or "").strip().isdigit() else None
+            query = (ev.get("query") or "").strip() or TOPICS.get(ev.get("topic"), {}).get("query", "")
+            if not query or not sources:
+                focus("literature", None, "Enter a query and choose at least one source.")
+            else:
+                rep = ingestor.collect(query, sources=sources, limit_per_source=max(1, min(int(ev.get("limit") or 25), 100)),
+                                       year_from=to_int(ev.get("year_from")), year_to=to_int(ev.get("year_to")),
+                                       topic=ev.get("topic") or None)
+                ss.lit_report = rep.as_dict()
+                problems = [f"{o.source} {o.status.replace('_', '-')}" for o in rep.outcomes if o.status not in ("ok", "cached")]
+                msg = f"Collected {len(set(rep.publication_ids))} papers ({rep.new} new)" + (f"; {', '.join(problems)}" if problems else "")
+                first = rep.publication_ids[0] if rep.publication_ids else None
+                focus("literature", f"PUB-{first}" if first else None, msg)
+        elif kind == "lit_doi":
+            pid = ingestor.ingest_doi(ev.get("doi") or "")
+            focus("literature", f"PUB-{pid}" if pid else None,
+                  "Added from DOI" if pid else "No record found for that DOI in OpenAlex or Crossref.")
+        elif kind == "lit_fulltext":
+            pid = int(str(ev.get("id", "")).replace("PUB-", "") or 0)
+            res = ingestor.fetch_full_text(pid)
+            focus("literature", f"PUB-{pid}", f"Full text added ({res['pages']} pages)" if res.get("ok") else res.get("reason"))
+        elif kind == "upload_papers":
             first_id, n_ok = None, 0
             for f in ev.get("files", []):
                 name = f.get("name", "paper")
@@ -229,8 +261,13 @@ def research_page():
     if llm.live_failure:
         mode = f"LLM: {llm.live_failure}. Using rule-based analysis."
     mode = f"{mode} | {kb.describe()}"
-    meta = {"mode": mode, "seq": ss.seq, "done": ss.done, "agenda": pipe.agenda_markdown() if pipe.gaps else ""}
-    overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta)
+    literature = [build_publication_view(p) for p in list_publications()]
+    meta = {"mode": mode, "seq": ss.seq, "done": ss.done, "agenda": pipe.agenda_markdown() if pipe.gaps else "",
+            "topics": [{"key": k, **v} for k, v in TOPICS.items()],
+            "lit_report": ss.get("lit_report"),
+            "search_runs": build_search_runs_view(recent_search_runs(limit=12)),
+            "s2_key": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")), "openalex_key": bool(os.getenv("OPENALEX_API_KEY"))}
+    overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature)
 
 
 BAR_CSS = """<style>

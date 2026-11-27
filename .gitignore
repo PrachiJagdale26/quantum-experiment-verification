@@ -23,6 +23,7 @@ __pycache__/
 !data/benchmark_cases/*.json
 !data/sample_papers/*.json
 !data/benchmark/**/*.json
+!tests/fixtures/**/*.json
 *service-account*.json
 *credential*.json
 credentials/
@@ -51,3 +52,7 @@ Thumbs.db
 # Research database (local, reproducible runs)
 data/research.db
 data/research.db-*
+
+# Literature collection: HTTP cache and downloaded open-access full text
+data/cache/
+data/fulltext/
