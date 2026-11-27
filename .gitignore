@@ -54,6 +54,7 @@ data/research.db
 data/research.db-*
 data/benchmark/*.db
 data/benchmark/*.db-*
+data/benchmark/labels/
 data/checkpoints.db
 data/checkpoints.db-*
 data/reports/

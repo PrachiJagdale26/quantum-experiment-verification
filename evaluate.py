@@ -99,7 +99,29 @@ def run_novelty():
         print(f"  [{r['classification']:<24}] rank={r['rank_in_compared']} {r['title'][:70]}")
 
 
+def run_all_evaluations():
+    """
+    Every evaluation, on a copy of the research database; writes data/benchmark/evaluation_*.json and docs/EVALUATION.md.
+        python evaluate.py --all [--db sqlite:///path.db]
+    """
+    arg = lambda flag, default=None: sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+    root = os.path.abspath(os.path.dirname(__file__))
+    src = arg("--db") or os.getenv("RESEARCH_DB_URL") or f"sqlite:///{os.path.join(root, 'data', 'research.db')}"
+    from src.evaluation.run_all import run_all, to_markdown
+    from src.research_analysis.cross_paper_analysis import default_embedder
+    res = run_all(src, embed=default_embedder())
+    md = to_markdown(res)
+    with open(os.path.join(root, "docs", "EVALUATION.md"), "w", encoding="utf-8") as f:
+        f.write(md)
+    print(md)
+    print(f"Full results: {res['path']}")
+    print("Labelling sheets: " + ", ".join(f"{k} ({v})" for k, v in res["labelling_sheets"].items()))
+
+
 def main():
+    if "--all" in sys.argv:
+        run_all_evaluations()
+        return
     if "--novelty" in sys.argv:
         run_novelty()
         return

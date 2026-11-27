@@ -1,6 +1,25 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans), Phase 7 (orchestration) and Phase 8 (reports and UI) **done 2026-11-28**. Next: Phase 9 (evaluation).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans), Phase 7 (orchestration), Phase 8 (reports and UI) and Phase 9 (evaluation) **done 2026-11-28**. Next: Phase 10 (README).
+
+Phase 9 results (full numbers in [docs/EVALUATION.md](EVALUATION.md)):
+- **`python evaluate.py --all`** runs every evaluation on a copy of the research database. It writes `data/benchmark/evaluation_*.json` and `docs/EVALUATION.md` with procedure, dataset size, date, software versions and limitations. Modules: `src/evaluation/{retrieval_eval, extraction_eval, gap_eval, verification_eval, labels, run_all}.py`; the novelty benchmark is Phase 4's.
+- **Measured on the working copy of the corpus** (22 analysed papers, 1 from full text):
+  - **Novelty (known-work):** false-novelty 0/15 (95% CI 0–0.20), with the caveat that 15 questions have 4 shapes; specificity control 5/5.
+  - **Retrieval:** Recall@10 0.93, MRR 0.79, almost entirely from OpenAlex and the gap's own-words query. arXiv 0.00, Crossref 0.13; concept and synonym queries alone ≤ 0.07.
+  - **Extraction:** 0.957 of model statements had their evidence found in the source.
+  - **Verification:** 6/6 benchmark cases and 12/12 textbook plan cases correct, with no false pass or false fail.
+  - **Gaps:** 0.765 have verified-quote evidence, but only 0.294 name two or more dimensions of their own. There is 1 near-duplicate pair.
+- **A real flaw found and fixed.** The verifier stress test (perturbed copies of 124 real verified quotes) showed that fuzzy matching accepted every changed number and inserted negation, and 73% of swapped terms: detection 0.52.
+  - `verify_excerpt` now also requires numbers, negations and content words to agree with the aligned passage (with PDF hyphenation handled).
+  - After the fix: detection 0.996 and false rejection 0.000. All quotes already stored keep their status.
+- **Human-labelled metrics** (field and attribution accuracy, gap quality, plan rubric, future-work set, partially-investigated set) have labelling sheets in `data/benchmark/labels/` (git-ignored) and are reported as "not measured" with counts until labelled.
+  - These sheets were generated from the working copy. Delete them and run `evaluate.py --all --db` on your own database to get sheets for it; existing sheets are never overwritten.
+- **Known limitations:**
+  - One topic, small sets.
+  - Retrieval ground truth is one paper per question, so precision is not measured.
+  - The partially-investigated set needs a live novelty run after labelling.
+- **Tests:** 3 new offline tests (the verifier's meaning checks, verification evaluation, label scoring). An earlier Phase 9 slip that overwrote `tests/test_evaluation.py` was reverted; the new tests are in `tests/test_evaluation_phase9.py`. 167 pass; the 3 Vertex tests are deselected because billing is disabled.
 
 Phase 8 results:
 - **Report (`src/reporting/research_report.py`).** The 17 Module 8 sections are built from stored records for one plan: its gap, the gap's novelty investigation, the plan's revisions and approvals, verification runs, and the corpus context (collection, analysed papers, themes, coverage, untried pairs, recurring statements, all gaps and assessments).

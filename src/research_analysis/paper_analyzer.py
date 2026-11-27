@@ -50,6 +50,28 @@ def normalize_for_match(text: str) -> str:
     return t.strip()
 
 
+_NUM = re.compile(r"\d+(?:\.\d+)?")
+_NEG = re.compile(r"\b(?:not|no|never|cannot|without|neither|nor|none)\b|n't\b")
+_WORD = re.compile(r"[a-z]{4,}")
+
+
+def _same_meaning(ex: str, source_norm: str, start: int, end: int) -> bool:
+    """
+    A fuzzy match finds WHERE the quote is; this checks it says the same thing there. Measured in Phase 9: fuzzy
+    matching alone accepted quotes with a changed number, an inserted "not", or a swapped term. Required:
+    every number and every content word of the quote occurs in the aligned passage, and negations agree in count.
+    """
+    core = source_norm[start:end]
+    margin = 40 + len(ex) // 4                       # the alignment can stop short of a long quote's last words
+    wide = source_norm[max(0, start - margin):end + margin]
+    if not set(_NUM.findall(ex)) <= set(_NUM.findall(wide)):
+        return False
+    if len(_NEG.findall(ex)) != len(_NEG.findall(core)):
+        return False
+    unhyph = lambda t: t.replace("-", "")            # PDF line breaks: "meas-urements", "how-ever"
+    return set(_WORD.findall(unhyph(ex))) <= set(_WORD.findall(unhyph(wide)))
+
+
 def verify_excerpt(excerpt: str, source_norm: str, pages_norm: List[Tuple[int, str]]) -> Tuple[bool, float, Optional[int]]:
     """Is the excerpt in the source? Returns (verified, score 0..100, page)."""
     ex = normalize_for_match(excerpt)
@@ -57,9 +79,13 @@ def verify_excerpt(excerpt: str, source_norm: str, pages_norm: List[Tuple[int, s
         return False, 0.0, None
     if ex in source_norm:
         score = 100.0
+        verified = True
     else:
-        score = fuzz.partial_ratio(ex, source_norm) if len(source_norm) < 400_000 else 0.0
-    verified = score >= VERIFY_THRESHOLD
+        verified, score = False, 0.0
+        if len(source_norm) < 400_000:
+            al = fuzz.partial_ratio_alignment(ex, source_norm)
+            score = al.score
+            verified = score >= VERIFY_THRESHOLD and _same_meaning(ex, source_norm, al.dest_start, al.dest_end)
     page = None
     if verified and pages_norm:
         page = next((p for p, txt in pages_norm if ex in txt), None)
