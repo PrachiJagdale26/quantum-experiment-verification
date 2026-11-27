@@ -191,6 +191,7 @@ td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:t
 .form{display:grid;gap:8px;align-content:start}.form label{font-size:14px;font-weight:400}.form .lf-row label{display:block;margin-bottom:4px}
 .srcs{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;margin:6px 0;display:grid;gap:6px}.srcs legend{font-size:14px;padding:0 6px}
 .cmp{width:100%;border-collapse:collapse;font-size:14px}.cmp th{text-align:left;font-weight:500;font-size:13px;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}.cmp td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}.cmp td.num{font-variant-numeric:tabular-nums}.cmp tr.decided td{background:color-mix(in srgb,var(--amp) 8%,transparent)}.tblwrap{overflow-x:auto}
+.psec{padding:8px 0;border-top:1px solid var(--rule)}.psec:first-of-type{border-top:0}.pform{display:grid;gap:14px;max-width:900px}.pe{display:grid;gap:6px;font-size:14px}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}.err{color:var(--fail)}
 .wts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.wts label{font-size:13px;display:grid;gap:4px}
 .chk{display:flex;gap:8px;align-items:center;min-height:32px}.chk input{width:18px;height:18px;accent-color:var(--amp)}
 .hold.chip,.chip.hold{color:var(--hold)}.pass.chip,.chip.pass{color:var(--pass)}
@@ -244,6 +245,7 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
   corpus_gaps:['Reading verified limitations, open problems and future work','Merging statements several papers share','Finding untried method × platform and method × noise pairs','Rewriting gaps as research questions (labelled)','Saving candidates'],
   novelty:['Building queries from the gap’s dimensions and synonyms','Searching OpenAlex and Crossref','Searching arXiv (3 s between requests)','Following works that cite the supporting papers','Comparing the closest papers dimension by dimension','Classifying by fixed rules and recording coverage'],
+  proposal:['Loading the gap, its evidence and its novelty investigation','Classifying feasibility by rule','Asking the model for a grounded proposal','Checking every quote against the sources','Listing what is still missing'],
   plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
   proposals:['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report']};
 const $=s=>document.querySelector(s);
@@ -295,6 +297,7 @@ function row(p){
   if(sec==='gaps'&&p.kind==='corpus')return corpusGapRow(p);
   if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
     <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
+  if(sec==='plans'&&p.kind==='proposal')return proposalRow(p);
   const [c,t]=pstatus(p);
   return `<span class="id">${esc(p.id)}${p.revision?'<span class="chip t-future_work">Revised</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span>`;}
 function renderRailFilters(){
@@ -503,6 +506,92 @@ function corpusGapView(g){
       ${g.dimensions.map(d=>`<div class="fg"><span>${esc(d.name.replace('_',' '))}</span><b style="font-weight:400;text-align:right">${d.values.map(esc).join(', ')}<br><span class="hint">${esc(DSRC[d.source]||d.source)}${d.core?' · compared':' · context only'}</span></b></div>`).join('')||'<p class="hint">None recognised.</p>'}</div>
     ${rankPanel(g)}</div></section>`;}
 
+/* ------------------------------------------- Research proposals (Phase 5) */
+const PSTAT={draft:['hold','Draft'],approved:['pass','Approved'],rejected:['fail','Rejected']};
+const FEAS={simulatable:'pass',needs_hardware:'hold',needs_physical_validation:'fail'};
+const JROLE={motivates:'Motivates the gap',closest_prior_work:'Closest prior work',baseline:'Baseline',method_source:'Method source'};
+const PSRC={literature:'pass',gap_evidence:'pass',assumption:'hold',researcher:'t-future_work'};
+let editing=null;
+function proposalRow(p){const [c,l]=PSTAT[p.status];
+  return `<span class="id">${esc(p.id)}<span class="chip ${FEAS[p.feasibility]}">${esc(p.feasibility_label)}</span></span><span class="t">${esc(p.title)}</span>
+    <span class="st ${c}">${l} · revision ${p.revision}</span>`;}
+function sectionView(s){
+  const v=s.value,empty=Array.isArray(v)?!v.length:!v;
+  const body=empty?`<p class="hint" style="margin:0">${s.required?'<b class="hold">Required, not written yet.</b>':'Not written.'}</p>`
+    :Array.isArray(v)?`<ul class="plain">${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:`<p style="margin:0">${esc(v)}</p>`;
+  return `<div class="psec"><h4 class="fh">${esc(s.label)}</h4>${body}</div>`;}
+function circuitText(c){return c.gates.map(g=>`${g.name}${g.params?`(${g.params.map(x=>(+x).toFixed(3)).join(',')})`:''} q${g.target_qubits.join(',q')}`).join(' → ');}
+function proposalView(p){
+  if(editing===p.id)return proposalEdit(p);
+  const [c,l]=PSTAT[p.status];
+  const just=p.justification.map(j=>`<blockquote class="quote"><p>${esc(j.point)}</p>
+      ${j.quote?`<p class="hint" style="margin-top:6px">“${esc(j.quote)}”</p>`:''}
+      <cite><button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(j.pub)}">${esc(j.title)}</button> (${esc(j.year||'n.d.')})${j.doi?` · <a href="https://doi.org/${esc(j.doi)}" target="_blank" rel="noopener">doi:${esc(j.doi)}</a>`:''}
+        <span class="chip t-future_work">${esc(JROLE[j.role]||j.role)}</span>
+        ${j.quote?(j.verified?'<span class="chip pass">Quote verified</span>':'<span class="chip fail">Quote not found in the source</span>'):'<span class="chip hold">Inference, no quote</span>'}</cite></blockquote>`).join('');
+  const params=p.parameters.length?`<div class="tblwrap"><table class="cmp"><thead><tr><th>Parameter</th><th>Value</th><th>Source</th><th>Basis</th></tr></thead><tbody>
+      ${p.parameters.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${esc(x.value)} ${esc(x.unit)}</td><td><span class="chip ${PSRC[x.source]}">${esc(x.source_label)}</span></td>
+        <td class="hint">${x.pub?`<button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(x.pub)}">source</button> `:''}${esc(x.basis)}</td></tr>`).join('')}</tbody></table></div>`
+    :'<p class="hint" style="margin:0">No parameters yet. Every parameter must say whether it comes from the literature or is an assumption.</p>';
+  const circ=p.circuit?`<p class="math" style="margin:0 0 6px">${p.circuit.num_qubits} qubits: ${esc(circuitText(p.circuit))}</p>
+      <p class="hint" style="margin:0">Predicted: ${p.circuit.expected_outcomes.map(o=>`P(${esc(o.basis_state)}) = ${o.expected_probability}`).join(', ')||'no prediction'}${p.circuit.prediction_basis?` · ${esc(p.circuit.prediction_basis)}`:''}</p>
+      <p class="hint">Verification of the circuit runs on approved plans (next phase).</p>`:'<p class="hint" style="margin:0">No circuit specified.</p>';
+  const hist=p.history.map(h=>`<li>Revision ${h.revision} · ${esc(h.by)} · ${esc((h.at||'').slice(0,16).replace('T',' '))}${h.changed.length?` · changed: ${esc(h.changed.join(', '))}`:''}${h.note?` · “${esc(h.note)}”`:''}</li>`).join('');
+  const appr=p.approvals.map(a=>`<li><b>${esc(a.decision.replace('_',' '))}</b> on revision ${a.revision} · ${esc((a.at||'').slice(0,16).replace('T',' '))}${a.note?` · “${esc(a.note)}”`:''}</li>`).join('');
+  const canApprove=!p.empty_required.length;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><button class="link" style="padding:0;min-height:0" data-goto="gaps:${esc(p.gap_id)}">For ${esc(p.gap_id)}${p.gap_title?`: ${esc(p.gap_title)}`:''}</button>
+      <span>Revision ${p.revision}</span><span>${esc(p.generated_by==='template'?'Template draft':`Written by ${p.generated_by}`)}</span></div>
+    <div class="tag ${c}">${l}</div><h2>${esc(p.title)}</h2>
+    <p class="lead"><span class="chip ${FEAS[p.feasibility]}">${esc(p.feasibility_label)}</span> ${esc(p.feasibility_reason)}</p>
+    <div class="act"><button class="btn primary" data-act="plan_edit_open">Edit plan</button><button class="btn" data-act="plan_redraft">Draft a new version</button></div>
+    ${p.missing.length?`<ul class="missing">${p.missing.map(m=>`<li><span class="ket">|?⟩</span><span>${esc(m)}</span></li>`).join('')}</ul>`:''}
+    ${p.warnings.length?`<p class="hint">${p.warnings.map(esc).join(' ')}</p>`:''}</section>
+  <section class="board"><div>
+    <div class="panel"><h3>Proposal</h3><p class="sub">Generated text is a draft for you to check; nothing here is a finding.</p>
+      ${p.sections.slice(0,6).map(sectionView).join('')}</div>
+    <div class="stack-gap"><div class="panel"><h3>Literature justification</h3><p class="sub">Every quote is checked against the stored source text.</p>${just||'<p class="hint">None.</p>'}</div></div>
+    <div class="stack-gap"><div class="panel"><h3>Experiment</h3>${p.sections.slice(6,12).map(sectionView).join('')}
+      <h4 class="fh">Experimental parameters</h4>${params}<h4 class="fh">Circuit</h4>${circ}</div></div>
+    <div class="stack-gap"><div class="panel"><h3>Evaluation and outlook</h3>${p.sections.slice(12).map(sectionView).join('')}</div></div></div>
+   <div class="side"><div class="panel"><h3>Your decision</h3>
+      <p class="sub">The system never approves a plan. Approval applies to revision ${p.revision}; any later edit makes a new draft.</p>
+      <label class="vh" for="decnote">Note</label><textarea id="decnote" class="in" rows="3" placeholder="Note (required to reject or request changes)"></textarea>
+      <div class="row" style="margin-top:10px"><button class="btn primary" data-decide="approved" ${canApprove?'':'disabled'}>Approve</button>
+        <button class="btn" data-decide="changes_requested">Request changes</button><button class="btn" data-decide="rejected">Reject</button></div>
+      ${canApprove?'':`<p class="hint">To approve, fill in: ${esc(p.empty_required.join(', '))}.</p>`}</div>
+    <div class="panel"><h3>Audit trail</h3><ul class="plain">${hist}</ul>${appr?`<h4 class="fh">Decisions</h4><ul class="plain">${appr}</ul>`:''}</div></div></section>`;}
+function proposalEdit(p){
+  const ta=(s)=>`<label class="pe"><span>${esc(s.label)}${s.required?' <b class="hold">required</b>':''}${s.kind==='list'?' <span class="hint">(one per line)</span>':''}</span>
+    <textarea class="in" rows="${s.kind==='list'?4:3}" data-pe="${esc(s.key)}" data-kind="${s.kind}">${esc(Array.isArray(s.value)?s.value.join('\n'):s.value)}</textarea></label>`;
+  const prow=(x,i)=>`<tr><td><input class="in" data-pp="name" data-i="${i}" value="${esc(x.name)}"></td><td><input class="in" data-pp="value" data-i="${i}" value="${esc(x.value)}"></td>
+    <td><input class="in" data-pp="unit" data-i="${i}" value="${esc(x.unit)}"></td><td class="hint">${esc(x.source_label||'Set by the researcher')}</td></tr>`;
+  const rows=[...p.parameters,{name:'',value:'',unit:''},{name:'',value:'',unit:''}];
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>Editing revision ${p.revision}; saving creates revision ${p.revision+1}</span></div>
+    <h2>Edit the plan</h2><p class="lead">Changed parameters are marked “Set by the researcher”. Unchanged ones keep their source.</p></section>
+  <form id="peform" class="panel pform">
+    <label class="pe"><span>Title</span><input class="in" data-pe="title" data-kind="text" value="${esc(p.title)}"></label>
+    ${p.sections.filter(s=>s.editable).map(ta).join('')}
+    <label class="pe"><span>Feasibility</span><select class="in" data-pe="feasibility_class" data-kind="text">
+      ${Object.entries({simulatable:'Simulatable',needs_hardware:'Requires quantum hardware',needs_physical_validation:'Requires additional physical validation'}).map(([k,l])=>`<option value="${k}" ${k===p.feasibility?'selected':''}>${l}</option>`).join('')}</select></label>
+    <div class="pe"><span>Experimental parameters <span class="hint">(clear a row's name and value to remove it)</span></span>
+      <div class="tblwrap"><table class="cmp"><thead><tr><th>Name</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody>${rows.map(prow).join('')}</tbody></table></div></div>
+    <label class="pe"><span>Circuit <span class="hint">(JSON: num_qubits, gates, expected_outcomes, prediction_basis; leave empty for none)</span></span>
+      <textarea class="in mono" rows="6" data-pe="circuit" data-kind="json">${esc(p.circuit?JSON.stringify(p.circuit,null,1):'')}</textarea></label>
+    <label class="pe"><span>What you changed and why (stored in the audit trail)</span><input class="in" id="penote"></label>
+    <p class="hint err" id="pe-err" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Save as revision ${p.revision+1}</button><button class="btn" type="button" data-act="plan_edit_cancel">Cancel</button></div></form>`;}
+function collectEdit(p){
+  const changes={},err=$('#pe-err');
+  document.querySelectorAll('[data-pe]').forEach(el=>{const k=el.dataset.pe,kind=el.dataset.kind;
+    if(kind==='list')changes[k]=el.value.split('\n').map(x=>x.trim()).filter(Boolean);
+    else if(kind==='json'){const t=el.value.trim();if(!t){changes[k]=null;return}
+      try{changes[k]=JSON.parse(t)}catch(e){throw new Error('The circuit is not valid JSON: '+e.message)}}
+    else changes[k]=el.value;});
+  const rows={};document.querySelectorAll('[data-pp]').forEach(el=>{(rows[el.dataset.i]=rows[el.dataset.i]||{})[el.dataset.pp]=el.value.trim()});
+  changes.parameters=Object.values(rows).filter(r=>r.name||r.value);
+  if(changes.parameters.some(r=>!r.name||!r.value))throw new Error('Every parameter needs a name and a value.');
+  return changes;}
+
 /* ------------------------------------------------- Plan / proposal view */
 function verdictView(p){
   const isPlan=sec==='plans',[c,t,k]=(isPlan?VP:V)[p.v];
@@ -674,7 +763,7 @@ function render(){
   else if(!p)html=blank();
   else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
   else if(p.state==='bad')html=errorView(p);
-  else html=sec==='papers'?paperView(p):sec==='gaps'?gapView(p):verdictView(p);
+  else html=sec==='papers'?paperView(p):sec==='gaps'?gapView(p):p.kind==='proposal'?proposalView(p):verdictView(p);
   $('#main').innerHTML=html;}
 
 function toast(msg,undo){$('#tmsg').textContent=msg;$('#undo').hidden=!undo;last=undo;$('#toast').hidden=false;
@@ -721,6 +810,10 @@ function act(kind){
   if(kind==='corpus_gaps'){busy={sec:'gaps',title:'Finding gaps in the corpus',step:0,steps:STEPS.corpus_gaps};sec='gaps';render();emit({kind});return}
   if(kind==='novelty_check'){busy={sec:'gaps',title:`Checking the novelty of ${p.id}`,file:p.title,step:0,steps:STEPS.novelty};render();emit({kind,id:p.id});return}
   if(kind==='gap_weights'){const weights={};document.querySelectorAll('[data-w]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))weights[i.dataset.w]=v});emit({kind,weights,id:p&&p.id});return}
+  if(kind==='plan_gap'&&p.kind==='corpus'){busy={sec:'plans',title:`Drafting a proposal for ${p.id}`,file:p.title,step:0,steps:STEPS.proposal};sec='plans';render();emit({kind,gap_id:p.id});return}
+  if(kind==='plan_redraft'){busy={sec:'plans',title:`Drafting a new proposal for ${p.gap_id}`,file:p.gap_title,step:0,steps:STEPS.proposal};render();emit({kind,gap_id:p.gap_id});return}
+  if(kind==='plan_edit_open'){editing=p.id;render();$('#pane').scrollTop=0;return}
+  if(kind==='plan_edit_cancel'){editing=null;render();return}
   if(kind==='plan_gap'){busy={sec:'plans',title:`Planning an experiment for ${p.id}`,file:p.title,step:0};const gid=p.id;sec='plans';render();emit({kind,gap_id:gid});return}
   if(kind==='sample_papers'){const token='s'+Date.now();['A','B','C','D'].forEach((x,i)=>pending.papers.push({id:`New ${i+1}`,title:`Sample paper ${x}`,file:'synthetic sample',state:'run',step:0,token}));
     sec='papers';sel.papers=pending.papers[0].id;render();emit({kind,token});return}
@@ -737,6 +830,9 @@ document.addEventListener('click',e=>{
   const p=cur();
   if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
   if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.decide){const p2=cur(),note=($('#decnote')?.value||'').trim();
+    if(t.dataset.decide!=='approved'&&note.length<10){toast('Add a short note (10+ characters) saying why.');$('#decnote')?.focus();return}
+    emit({kind:'plan_decide',id:p2.id,decision:t.dataset.decide,note});toast('Saving your decision…');return}
   if(t.dataset.review){const p2=cur();if(p2)emit({kind:'gap_review',id:p2.id,status:t.dataset.review});return}
   if(t.dataset.curate){const p2=cur();if(p2)emit({kind:'lit_curate',id:p2.id,status:t.dataset.curate});return}
   if(t.dataset.litmode){litMode=t.dataset.litmode;render();$('#pane').scrollTop=0;return}
@@ -791,6 +887,9 @@ function litSubmit(form){
 document.addEventListener('input',e=>{if(e.target.id==='msg'){drafts[sel[sec]]=e.target.value;
   if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
 document.addEventListener('submit',e=>{e.preventDefault();
+  if(e.target.id==='peform'){const p=cur();let changes;
+    try{changes=collectEdit(p)}catch(err2){const el=$('#pe-err');el.textContent=err2.message;el.hidden=false;return}
+    emit({kind:'plan_edit',id:p.id,changes,note:$('#penote').value});editing=null;toast('Saving…');return}
   if(e.target.id==='litform'||e.target.id==='doiform'){litSubmit(e.target);return}
   const p=cur(),v=(drafts[p.id]||'').trim();
   if(v.length<20){err=v?`Add ${20-v.length} more characters so the author knows what to change.`:'Add a note so the author knows what to change.';render();$('#msg').focus();return}

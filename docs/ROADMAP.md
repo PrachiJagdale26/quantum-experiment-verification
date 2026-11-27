@@ -1,6 +1,33 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis) and Phase 4 (gap discovery and novelty) **done 2026-11-28**. Next: Phase 5 (planning with edit and approval).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval) **done 2026-11-28**. Next: Phase 6 (verification of approved plans, noise).
+
+Phase 5 results:
+- **Research proposal (`src/experiment_planning/schema.py`):** all 20 sections Module 6 lists, plus a feasibility class (simulatable, requires quantum hardware, or requires additional physical validation) with its reason, an optional circuit with theoretical predictions, missing information, warnings, and who wrote it.
+- **Grounding (`proposal_planner.py`).** The model may cite only the gap's evidence papers and the closest papers from its novelty investigation, by id. Citations to anything else are dropped.
+  - Every quote is checked against the stored title, abstract and verified statements. An unverified justification is kept but flagged.
+  - A "literature" parameter whose quote is not found becomes an explicit assumption that says so.
+  - An invalid circuit is removed with a warning (gate qubits outside the register, bitstrings of the wrong length).
+  - Feasibility is decided by a deterministic rule; the model may raise it but never lower it.
+  - The prompt passes the gap's novelty status and forbids novelty claims.
+- **Without a live model,** the template fills only what the gap determines (problem, justification from verified evidence and closest prior work, system, techniques, baselines). It lists the required sections still empty under missing information instead of inventing them.
+- **Edits and approval (`plan_store.py`).** Each edit is stored as a new revision recording the fields changed and the researcher's note. Changed parameters become "set by the researcher"; unchanged ones keep their source.
+  - Approval needs every required section (research question, hypothesis, methodology, dependent variables, metrics). Rejecting or requesting changes needs a note.
+  - A decision is an `Approval` row on the exact revision. Editing an approved plan creates a new draft, so approval never carries over.
+- **UI:** the Plans step lists proposals with status, revision and feasibility. Each proposal view shows:
+  - its sections, missing information and warnings;
+  - literature justifications with DOI links and labels: "Quote verified", "Quote not found in the source", or "Inference, no quote";
+  - a parameter table with sources, and the circuit;
+  - an edit form (text, lists, parameters, circuit as JSON, feasibility, note), the decision panel and the audit trail.
+  - "Plan an experiment" on a corpus gap drafts a proposal. Uploaded-paper gaps keep the older plan-and-verify flow.
+- **Live check (scratch copy):** for "efficient decoders for measurement-induced phases", Gemini wrote a proposal citing the neural-network decoder paper the novelty check found, with a verified quote. It listed the circuit as missing instead of inventing one.
+  - For "error correction under depolarizing noise", its circuit predicted that a 3-qubit GHZ state gives `000` with probability 1 (the correct result is ½ `000` + ½ `111`). Phase 6 verification is there to catch exactly this.
+  - In the browser: edit → revision 1 with changed fields; approval recorded on revision 1; a rejection with a short note is refused.
+- **Known limitations:**
+  - Plan ids skip numbers (RP-1, RP-2, RP-4) because the id is the first revision's row.
+  - Plans for gaps without a novelty check have fewer sources to cite.
+  - Plan quality is not yet rated (Phase 9 rubric).
+- **Tests:** 5 new offline tests (feasibility rules, a template that invents nothing, grounding against a fabricating model, the edit/approve/audit trail, circuit validation). 148 pass; the 3 Vertex tests are deselected because billing is disabled.
 
 Phase 4 results:
 - **Gap generation (`src/gap_discovery/gap_generator.py`).** Gaps come only from verified statements (limitations, unresolved problems, future work); statements several papers share are merged into one gap. Untried method × platform and method × noise pairs become "untried in this corpus" gaps, labelled as inference.

@@ -32,11 +32,11 @@ from src.literature import TOPICS, LiteratureIngestor, list_publications, recent
 from src.research_analysis import PaperAnalyzer, analyse_corpus, load_analysis
 from src.gap_discovery import (DEFAULT_WEIGHTS, RANK_DIMENSIONS, GapGenerator, NoveltyChecker, load_assessment, load_gaps,
                                save_gaps, score_gap, weighted_total)
-from src.gap_discovery.adapter import to_research_gap
+from src.experiment_planning import PlanEditError, ProposalPlanner, apply_edit, decide, list_plans, save_draft
 from src.storage import CandidateGap, Publication, session_scope
 from src.ui.overlap_view import (build_analysis_view, build_corpus_gap_view, build_corpus_view, build_gap_view,
-                                 build_paper_view, build_plan_view, build_publication_view, build_search_runs_view,
-                                 build_view, overlap)
+                                 build_paper_view, build_plan_view, build_proposal_view, build_publication_view,
+                                 build_search_runs_view, build_view, overlap)
 from src.verification.engine import VerificationEngine
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
@@ -282,13 +282,27 @@ def research_page():
                     row.review_status = ev["status"]
             focus("gaps", f"CG-{gid}", {"validated": "Marked as validated by you", "rejected": "Marked as rejected",
                                         "candidate": "Back to candidate"}[ev["status"]])
-        elif kind == "plan_gap" and str(ev.get("gap_id", "")).startswith("CG-") and not pipe.gap(ev["gap_id"]):
-            _, rows = corpus_gap_views(ss.get("gap_weights") or {}, {})
-            if ev["gap_id"] in rows:
-                g, _, sc, tot = rows[ev["gap_id"]]
-                pipe.gaps.append(to_research_gap(g, sc, tot))
-                handle(ev)
-                return
+        elif kind in ("plan_gap", "plan_redraft") and str(ev.get("gap_id", "")).startswith("CG-"):
+            gid = int(ev["gap_id"].replace("CG-", ""))
+            p = ProposalPlanner(llm).draft(gid)
+            lin = save_draft(p)
+            note = "written by the model" if p.generated_by != "template" else "template: fill in the missing sections"
+            focus("plans", f"RP-{lin}", f"Draft proposal RP-{lin} ({note})")
+        elif kind == "plan_edit":
+            lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
+            try:
+                plan = apply_edit(lin, ev.get("changes") or {}, note=str(ev.get("note") or ""))
+                focus("plans", f"RP-{lin}", f"Saved as revision {plan['revision']}")
+            except PlanEditError as exc:
+                focus("plans", f"RP-{lin}", f"Not saved: {exc}")
+        elif kind == "plan_decide":
+            lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
+            try:
+                plan = decide(lin, str(ev.get("decision")), note=str(ev.get("note") or ""))
+                focus("plans", f"RP-{lin}", {"approved": "Approved by you", "rejected": "Rejected",
+                                             "draft": "Changes requested"}[plan["status"]])
+            except PlanEditError as exc:
+                focus("plans", f"RP-{lin}", str(exc))
         elif kind == "plan_gap" and pipe.gap(ev.get("gap_id")):
             plan = pipe.plan(ev["gap_id"])
             ss.plan_times[plan.plan_id] = now_label()
@@ -342,12 +356,17 @@ def research_page():
     for plan in pipe.plans.values():
         planned.setdefault(plan.gap_id, plan.plan_id)
     gap_titles = {g.gap_id: g.title for g in pipe.gaps}
-    corpus_gaps, _ = corpus_gap_views(ss.get("gap_weights") or {}, planned)
+    proposals_db = list_plans()
+    for pl in proposals_db:                       # newest first, so a gap links to its latest proposal
+        planned.setdefault(f"CG-{pl['gap_id']}", f"RP-{pl['lineage']}")
+    corpus_gaps, gap_rows = corpus_gap_views(ss.get("gap_weights") or {}, planned)
 
     papers = [build_paper_view(pid, p) for pid, p in pipe.library.papers()] + ss.paper_errors
     gaps = corpus_gaps + [build_gap_view(g, planned.get(g.gap_id)) for g in pipe.gaps if not g.gap_id.startswith("CG-")]
-    plans = [build_plan_view(plan, pipe.reports[pid], gap_titles.get(plan.gap_id, plan.gap_id), ss.plan_times.get(pid, ""))
-             for pid, plan in reversed(list(pipe.plans.items())) if pid in pipe.reports]
+    plans = [build_proposal_view(pl, gap_rows[f"CG-{pl['gap_id']}"][0].title if f"CG-{pl['gap_id']}" in gap_rows else "")
+             for pl in proposals_db]
+    plans += [build_plan_view(plan, pipe.reports[pid], gap_titles.get(plan.gap_id, plan.gap_id), ss.plan_times.get(pid, ""))
+              for pid, plan in reversed(list(pipe.plans.items())) if pid in pipe.reports]
     if getattr(llm, "last_model_used", None) and llm.last_model_used != llm.model_name:
         mode = f"{mode} (last answer from fallback {llm.last_model_used})"
     if llm.live_failure:

@@ -441,3 +441,39 @@ def build_corpus_gap_view(gap, assessment: Optional[Dict[str, Any]], scores: Dic
         "assessment": a, "scores": [{"key": k, "label": lbl, **scores[k]} for k, lbl in RANK_DIMENSIONS],
         "total": total, "priority": total, "plan_id": plan_id,
     }
+
+
+# ----------------------------------------------------------------------------------
+# Research proposals: edit and approval (Phase 5)
+# ----------------------------------------------------------------------------------
+def build_proposal_view(plan: Dict[str, Any], gap_title: str = "") -> Dict[str, Any]:
+    from src.experiment_planning import FEASIBILITY_LABELS, PARAM_SOURCE_LABELS, SECTIONS
+    from src.experiment_planning.schema import REQUIRED
+    p = plan["proposal"]
+    sections = []
+    for key, label, kind in SECTIONS:
+        if kind == "special":
+            continue
+        sections.append({"key": key, "label": label, "kind": kind, "value": getattr(p, key),
+                         "required": key in REQUIRED, "editable": key != "gap_statement"})
+    empty_required = [lbl for k, lbl, _ in SECTIONS if k in REQUIRED and not getattr(p, k)]
+    c = p.circuit
+    return {
+        "id": f"RP-{plan['lineage']}", "kind": "proposal", "lineage": plan["lineage"], "title": p.title,
+        "status": plan["status"], "revision": plan["revision"], "gap_id": f"CG-{p.gap_id}", "gap_title": gap_title,
+        "generated_by": p.generated_by, "feasibility": p.feasibility_class,
+        "feasibility_label": FEASIBILITY_LABELS[p.feasibility_class], "feasibility_reason": p.feasibility_reason,
+        "sections": sections,
+        "justification": [{"pub": f"PUB-{j.publication_id}", "title": j.title, "year": j.year, "doi": j.doi, "role": j.role,
+                           "point": j.point, "quote": j.quote, "verified": j.verified} for j in p.literature_justification],
+        "parameters": [{"name": x.name, "value": x.value, "unit": x.unit, "source": x.source,
+                        "source_label": PARAM_SOURCE_LABELS[x.source], "basis": x.basis, "verified": x.verified,
+                        "pub": f"PUB-{x.publication_id}" if x.publication_id else None} for x in p.parameters],
+        "circuit": None if c is None else {
+            "num_qubits": c.num_qubits, "gates": [{"name": g.name, "target_qubits": g.target_qubits, "params": g.params}
+                                                  for g in c.gates],
+            "expected_outcomes": [{"basis_state": o.basis_state, "expected_probability": o.expected_probability}
+                                  for o in c.expected_outcomes], "prediction_basis": c.prediction_basis},
+        "missing": p.missing_information, "warnings": p.warnings, "empty_required": empty_required,
+        "history": plan["history"], "approvals": plan["approvals"],
+    }
