@@ -30,9 +30,13 @@ from src.research import ExperimentPlanner, GapFinder, PaperIngestError, PaperLi
 from src.schemas.proposal import ProposalSpecification
 from src.literature import TOPICS, LiteratureIngestor, list_publications, recent_search_runs
 from src.research_analysis import PaperAnalyzer, analyse_corpus, load_analysis
-from src.storage import Publication, session_scope
-from src.ui.overlap_view import (build_analysis_view, build_corpus_view, build_gap_view, build_paper_view, build_plan_view,
-                                 build_publication_view, build_search_runs_view, build_view, overlap)
+from src.gap_discovery import (DEFAULT_WEIGHTS, RANK_DIMENSIONS, GapGenerator, NoveltyChecker, load_assessment, load_gaps,
+                               save_gaps, score_gap, weighted_total)
+from src.gap_discovery.adapter import to_research_gap
+from src.storage import CandidateGap, Publication, session_scope
+from src.ui.overlap_view import (build_analysis_view, build_corpus_gap_view, build_corpus_view, build_gap_view,
+                                 build_paper_view, build_plan_view, build_publication_view, build_search_runs_view,
+                                 build_view, overlap)
 from src.verification.engine import VerificationEngine
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
@@ -72,6 +76,24 @@ def get_services():
 def get_ingestor(_kb):
     """One literature ingestor per server: collectors share rate limits and the HTTP cache."""
     return LiteratureIngestor(kb=_kb)
+
+
+@st.cache_resource(show_spinner=False)
+def get_checker(_ingestor, _llm):
+    """One novelty checker per server, so paper embeddings are computed once."""
+    return NoveltyChecker(ingestor=_ingestor, llm=_llm)
+
+
+def corpus_gap_views(weights: Dict[str, float], planned: Dict[str, str]):
+    """(views sorted by the researcher's weighted total, {CG-id: (gap, scores, total)})."""
+    rows = {}
+    for g in load_gaps():
+        a = load_assessment(g.id)
+        sc = score_gap(g, a)
+        rows[f"CG-{g.id}"] = (g, a, sc, weighted_total(sc, weights))
+    views = [build_corpus_gap_view(g, a, sc, tot, planned.get(cid)) for cid, (g, a, sc, tot) in rows.items()]
+    views.sort(key=lambda v: (v["review"] == "rejected", -v["total"]))
+    return views, rows
 
 
 def research_page():
@@ -193,6 +215,7 @@ def research_page():
                 todo = [p.id for p in s.query(Publication).filter(Publication.analysed_at.is_(None),
                                                                   Publication.curation_status != "excluded",
                                                                   Publication.is_synthetic.is_(False),
+                                                                  Publication.discovered_via == "collection",
                                                                   Publication.abstract.is_not(None)).limit(n)]
             for pid in todo:
                 analyzer.analyse(pid)
@@ -234,6 +257,38 @@ def research_page():
         elif kind == "find_gaps":
             gaps = pipe.find_gaps()
             focus("gaps", gaps[0].gap_id if gaps else None, f"Found {len(gaps)} research gaps")
+        elif kind == "corpus_gaps":
+            gaps = save_gaps(GapGenerator(llm=llm).generate())
+            n = sum(1 for p in list_publications() if p.analysed_at is not None and p.curation_status != "excluded")
+            focus("gaps", None, f"{len(gaps)} candidate gaps from {n} analysed papers" if gaps else
+                  f"No gaps yet: the {n} analysed paper{'s' if n != 1 else ''} state no verified limitation, open problem or "
+                  "future work, and untried combinations need 2+ papers. Analyse more papers in Literature (full text helps).")
+        elif kind == "novelty_check":
+            gid = int(str(ev.get("id", "")).replace("CG-", "") or 0)
+            try:
+                a = get_checker(ingestor, llm).check(gid)
+                focus("gaps", f"CG-{gid}", f"{a['label']} (confidence {a['confidence']:.2f})")
+            except Exception as exc:          # recorded searches stay; the half-finished assessment is removed
+                focus("gaps", f"CG-{gid}", f"Novelty check stopped: {str(exc)[:160]}")
+        elif kind == "gap_weights":
+            ss.gap_weights = {k: max(0.0, min(5.0, float(v))) for k, v in (ev.get("weights") or {}).items()
+                              if k in DEFAULT_WEIGHTS}
+            focus("gaps", ev.get("id"), "Ranking weights updated")
+        elif kind == "gap_review" and ev.get("status") in ("candidate", "validated", "rejected"):
+            gid = int(str(ev.get("id", "")).replace("CG-", "") or 0)
+            with session_scope() as s:
+                row = s.get(CandidateGap, gid)
+                if row:
+                    row.review_status = ev["status"]
+            focus("gaps", f"CG-{gid}", {"validated": "Marked as validated by you", "rejected": "Marked as rejected",
+                                        "candidate": "Back to candidate"}[ev["status"]])
+        elif kind == "plan_gap" and str(ev.get("gap_id", "")).startswith("CG-") and not pipe.gap(ev["gap_id"]):
+            _, rows = corpus_gap_views(ss.get("gap_weights") or {}, {})
+            if ev["gap_id"] in rows:
+                g, _, sc, tot = rows[ev["gap_id"]]
+                pipe.gaps.append(to_research_gap(g, sc, tot))
+                handle(ev)
+                return
         elif kind == "plan_gap" and pipe.gap(ev.get("gap_id")):
             plan = pipe.plan(ev["gap_id"])
             ss.plan_times[plan.plan_id] = now_label()
@@ -287,9 +342,10 @@ def research_page():
     for plan in pipe.plans.values():
         planned.setdefault(plan.gap_id, plan.plan_id)
     gap_titles = {g.gap_id: g.title for g in pipe.gaps}
+    corpus_gaps, _ = corpus_gap_views(ss.get("gap_weights") or {}, planned)
 
     papers = [build_paper_view(pid, p) for pid, p in pipe.library.papers()] + ss.paper_errors
-    gaps = [build_gap_view(g, planned.get(g.gap_id)) for g in pipe.gaps]
+    gaps = corpus_gaps + [build_gap_view(g, planned.get(g.gap_id)) for g in pipe.gaps if not g.gap_id.startswith("CG-")]
     plans = [build_plan_view(plan, pipe.reports[pid], gap_titles.get(plan.gap_id, plan.gap_id), ss.plan_times.get(pid, ""))
              for pid, plan in reversed(list(pipe.plans.items())) if pid in pipe.reports]
     if getattr(llm, "last_model_used", None) and llm.last_model_used != llm.model_name:
@@ -308,6 +364,9 @@ def research_page():
             "lit_report": ss.get("lit_report"),
             "search_runs": build_search_runs_view(recent_search_runs(limit=12)),
             "corpus": ss.get("corpus_view"), "lit_mode": ss.pop("lit_mode", None),
+            "weights": {**DEFAULT_WEIGHTS, **(ss.get("gap_weights") or {})},
+            "rank_dims": [{"key": k, "label": lbl} for k, lbl in RANK_DIMENSIONS],
+            "analysed": sum(1 for p in literature if p["analysed"]),
             "s2_key": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")), "openalex_key": bool(os.getenv("OPENALEX_API_KEY"))}
     overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature)
 

@@ -190,6 +190,8 @@ td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:t
 .lf{display:grid;gap:6px;margin:0 4px 8px}.lf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
 .form{display:grid;gap:8px;align-content:start}.form label{font-size:14px;font-weight:400}.form .lf-row label{display:block;margin-bottom:4px}
 .srcs{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;margin:6px 0;display:grid;gap:6px}.srcs legend{font-size:14px;padding:0 6px}
+.cmp{width:100%;border-collapse:collapse;font-size:14px}.cmp th{text-align:left;font-weight:500;font-size:13px;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}.cmp td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}.cmp td.num{font-variant-numeric:tabular-nums}.cmp tr.decided td{background:color-mix(in srgb,var(--amp) 8%,transparent)}.tblwrap{overflow-x:auto}
+.wts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.wts label{font-size:13px;display:grid;gap:4px}
 .chk{display:flex;gap:8px;align-items:center;min-height:32px}.chk input{width:18px;height:18px;accent-color:var(--amp)}
 .hold.chip,.chip.hold{color:var(--hold)}.pass.chip,.chip.pass{color:var(--pass)}
 a{color:var(--amp)}
@@ -240,6 +242,8 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
   literature:['Querying OpenAlex','Querying arXiv (3 s between requests, as arXiv asks)','Querying Crossref','Merging duplicates across sources','Saving to the research database'],
   papers:['Reading the document','Finding limitations and future work','Extracting experiments','Indexing into the library'],
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
+  corpus_gaps:['Reading verified limitations, open problems and future work','Merging statements several papers share','Finding untried method × platform and method × noise pairs','Rewriting gaps as research questions (labelled)','Saving candidates'],
+  novelty:['Building queries from the gap’s dimensions and synonyms','Searching OpenAlex and Crossref','Searching arXiv (3 s between requests)','Following works that cite the supporting papers','Comparing the closest papers dimension by dimension','Classifying by fixed rules and recording coverage'],
   plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
   proposals:['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report']};
 const $=s=>document.querySelector(s);
@@ -288,6 +292,7 @@ function row(p){
       <span class="st done">${esc(p.sources.map(s=>SRC_LABEL[s.name]||s.name).join(', '))}</span>`}
   if(sec==='papers'){const [c,t]=p.state?pstatus(p):['pass',`${p.signals} gap signal${p.signals===1?'':'s'}`];
     return `<span class="id">${esc(p.id)}${p.synthetic?'<span class="chip t-future_work">Synthetic</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${esc(t)}</span>`}
+  if(sec==='gaps'&&p.kind==='corpus')return corpusGapRow(p);
   if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
     <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
   const [c,t]=pstatus(p);
@@ -313,7 +318,7 @@ function renderRail(){
   $('#railh').textContent=SECS[sec].rail;renderRailFilters();renderList();
   const foot={literature:`<button class="link" data-litmode="collect">Collect more literature</button>`,
     papers:`<button class="link" data-act="sample_papers">Load sample papers</button><button class="link" data-act="clear_papers">Clear library</button>`,
-    gaps:D.papers.length?`<button class="link" data-act="find_gaps">Find gaps again</button>`:'',
+    gaps:`<button class="link" data-act="corpus_gaps">Find gaps in the corpus</button>${D.papers.length?`<button class="link" data-act="find_gaps">Find gaps in uploaded papers</button>`:''}`,
     plans:D.plans.length?`<button class="link" id="agenda2">Download research agenda</button>`:'',
     proposals:`<button class="link" data-act="reload">Reload benchmark cases</button><button class="link" data-act="clear">Clear queue</button>`}[sec];
   $('#foot').innerHTML=`<p class="keys"><kbd>J</kbd> <kbd>K</kbd> move through the list</p>${foot}<p class="keys" style="margin-top:8px">${esc(meta.mode||'')}</p>`;}
@@ -413,6 +418,7 @@ function paperView(p){
 
 /* ------------------------------------------------------------ Gaps view */
 function gapView(g){
+  if(g.kind==='corpus')return corpusGapView(g);
   const meter=(label,v,why)=>`<div class="meterrow"><div class="hd"><span>${label}</span><b>${v.toFixed(2)}</b></div><div class="bar"><i style="width:${Math.round(v*100)}%"></i></div><p>${why}</p></div>`;
   const act=g.plan_id?`<button class="btn primary" data-goto="plans:${esc(g.plan_id)}">Open ${esc(g.plan_id)}</button><button class="btn" data-act="plan_gap">Plan another experiment</button>`
     :`<button class="btn primary" data-act="plan_gap">Plan an experiment</button>`;
@@ -427,6 +433,75 @@ function gapView(g){
     <div class="panel"><div class="fg"><span>Circuit family</span><b style="font-weight:400">${esc(g.family||'Not specific')}</b></div>
      <div class="fg"><span>Target platform</span><b style="font-weight:400">${esc(g.target||'Same as source')}</b></div>
      <div class="fg"><span>Testable here</span><b style="font-weight:400">${g.testable?'Yes':'No'}</b></div></div></div></section>`;}
+
+/* --------------------------------------------- Corpus gaps (Phase 4) */
+const CLS={already_investigated:['fail','Already investigated'],partially_investigated:['hold','Partially investigated'],
+  conflicting_findings:['hold','Conflicting findings'],potentially_unexplored:['pass','Potentially unexplored'],
+  insufficient_coverage:['done','Insufficient search coverage']};
+const DIMRES={same:['fail','same'],different:['pass','different'],not_stated:['done','not stated']};
+const DSRC={statement:'from the gap’s own text',paper_context:'from the source paper',corpus:'from corpus coverage',llm:'model interpretation'};
+const QKIND={exact:'Gap’s own words',statement_context:'Own words + main phenomenon',concepts:'Concepts',synonym:'Synonyms (ontology)',method:'Method-focused',condition:'Condition-focused',llm_alternative:'Model-proposed wording'};
+function corpusGapRow(p){
+  const [c,l]=p.classification?CLS[p.classification]:['done','Not checked'];
+  return `<span class="id">${esc(p.id)}<span class="chip t-${p.origin==='unexplored_combination'?'unexplored_combination':p.origin==='future_work'||p.origin==='unresolved_problem'?'future_work':'stated_limitation'}">${esc(p.origin_label)}</span></span>
+    <span class="t" ${p.review==='rejected'?'style="opacity:.55"':''}>${esc(p.title)}</span>
+    <span class="st ${p.plan_id?'pass':c}">${p.plan_id?'Planned':esc(l)} · ${p.total.toFixed(2)}</span>`;}
+function noveltyPanel(a){
+  if(!a)return `<div class="panel"><h3>Novelty</h3><p class="hint" style="margin:0">Not investigated yet. “Check novelty” searches OpenAlex, arXiv and Crossref,
+    the works citing the supporting papers and your corpus, compares the closest papers dimension by dimension, and classifies the gap by fixed rules.
+    It takes about half a minute; searches are cached.</p></div>`;
+  const [c,l]=CLS[a.classification]||['done',a.label],cov=a.coverage,f=a.findings,b=a.confidence_basis;
+  const dims=Object.keys(f.core_dimensions||{});
+  const rows=(f.closest||[]).map(p=>`<tr${p.publication_id===f.decided_by?' class="decided"':''}>
+      <td><div>${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>`:esc(p.title)}</div>
+        <div class="hint">${esc(p.year||'n.d.')} · ${p.availability==='metadata_only'?'title only':esc(p.availability.replace('_',' '))}${p.after_evidence?' · published after the gap’s evidence':''}${p.publication_id===f.decided_by?' · <b>decided the classification</b>':''}</div>
+        ${p.research_question?`<div class="hint">Model judge: ${p.research_question.verified?esc(p.research_question.result.replace('_',' ')):'discarded (its quote was not in the abstract)'}</div>`:''}</td>
+      <td class="num">${p.similarity.toFixed(2)}</td>
+      ${dims.map(d=>{const r=p.dimensions[d]||{result:'not_stated'};const [rc,rl]=DIMRES[r.result];return `<td><span class="chip ${rc}" title="${esc(r.quote||'')}">${rl}</span></td>`}).join('')}</tr>`).join('');
+  return `<div class="panel"><h3>Novelty investigation</h3>
+    <div class="tag ${c}" style="margin-top:6px">${esc(a.label)}</div>
+    <p style="margin:4px 0 6px">${esc(f.reason)}</p>
+    <div class="fg"><span>Confidence</span><b>${a.confidence.toFixed(2)}</b></div>
+    <details><summary class="hint">How the confidence is computed</summary><p class="hint">${esc(b.formula)}</p>
+      <p class="hint">coverage ${b.coverage} (sources ${b.sources_term}, screening ${b.screen_term}, text ${b.text_term}) · evidence ${b.evidence} · agreement ${b.agreement}</p></details>
+    <h4 class="fh">Search coverage ${cov.coverage_ok?'<span class="chip pass">meets the policy</span>':'<span class="chip hold">below the policy</span>'}</h4>
+    <p class="hint" style="margin:0">Sources answered: ${cov.sources_ok.map(s=>SRC_LABEL[s]||s).join(', ')||'none'}${cov.sources_failed.length?` · failed: <b>${cov.sources_failed.map(s=>SRC_LABEL[s]||s).join(', ')}</b>`:''}
+      · ${cov.screened} publications screened (${cov.with_abstract} with abstracts) · ${cov.citation_runs} citation search${cov.citation_runs===1?'':'es'} · your corpus${cov.excluded_supporting.length?` · ${cov.excluded_supporting.length} supporting paper(s) left out of the comparison`:''}</p>
+    <ul class="plain">${cov.queries.map(q=>`<li><span class="hint">${esc(QKIND[q.kind]||q.kind)}:</span> “${esc(q.query)}” <span class="hint">(${q.sources.map(s=>SRC_LABEL[s]||s).join(', ')})</span></li>`).join('')}</ul>
+    <h4 class="fh">Closest papers, dimension by dimension</h4>
+    <p class="hint" style="margin:0 0 6px">“Same” counts against novelty. Hover a result to see the sentence it rests on.</p>
+    ${rows?`<div class="tblwrap"><table class="cmp"><thead><tr><th>Paper</th><th>Similarity</th>${dims.map(d=>`<th>${esc(d.replace('_',' '))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="hint">No publications were screened.</p>'}
+    ${(f.evidence_against_novelty||[]).length?`<h4 class="fh">Evidence against novelty</h4><ul class="plain">${f.evidence_against_novelty.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+    ${(f.evidence_for_novelty||[]).length?`<h4 class="fh">Evidence for novelty</h4><ul class="plain">${f.evidence_for_novelty.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+    <h4 class="fh">What remains uncertain</h4><p class="hint" style="margin:0">${esc(a.uncertainty)}</p>
+    <p class="hint">Searched ${esc((a.searched_at||'').slice(0,16).replace('T',' '))} UTC.</p></div>`;}
+function rankPanel(g){
+  const w=meta.weights||{};
+  return `<div class="panel"><h3>Ranking</h3><div class="big">${g.total.toFixed(2)}</div><span class="math" style="display:block;color:var(--mute);margin:4px 0 8px">weighted total, using the weights below</span>
+    ${g.scores.map(s=>`<div class="meterrow"><div class="hd"><span>${esc(s.label)}</span><b>${s.score.toFixed(2)}</b></div><div class="bar"><i style="width:${Math.round(s.score*100)}%"></i></div><p>${esc(s.why)}</p></div>`).join('')}
+    <details style="margin-top:10px"><summary class="hint">Change the weights (0 to 5)</summary>
+      <div class="wts">${(meta.rank_dims||[]).map(d=>`<label>${esc(d.label)}<input class="in" type="number" min="0" max="5" step="0.5" data-w="${esc(d.key)}" value="${esc(w[d.key]??1)}"></label>`).join('')}</div>
+      <button class="btn" data-act="gap_weights">Apply weights to all gaps</button></details></div>`;}
+function corpusGapView(g){
+  const act=`${g.plan_id?`<button class="btn" data-goto="plans:${esc(g.plan_id)}">Open ${esc(g.plan_id)}</button>`:''}
+    <button class="btn ${g.assessment?'':'primary'}" data-act="novelty_check">${g.assessment?'Check novelty again':'Check novelty'}</button>
+    <button class="btn ${g.assessment&&!g.plan_id?'primary':''}" data-act="plan_gap">${g.plan_id?'Plan another experiment':'Plan an experiment'}</button>`;
+  const rev=[['candidate','Candidate'],['validated','Validated'],['rejected','Rejected']];
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(g.id)}</span><span class="chip t-future_work">${esc(g.origin_label)}</span>
+      <span>${g.papers} paper${g.papers===1?'':'s'}</span>${g.classification?`<span class="chip ${CLS[g.classification][0]}">${esc(g.class_label)}</span>`:''}</div>
+    <h2>${esc(g.title)}</h2>${g.title.replace(/…$/,'')===g.statement.replace(/[.\s]+$/,'')?'':`<p class="lead">${esc(g.statement)}</p>`}
+    ${g.question?`<p><b>Research question:</b> ${esc(g.question)} <span class="hint">(rewritten by ${esc(g.question_source)}; the evidence below is unchanged)</span></p>`:''}
+    <div class="act">${act}</div>
+    <div class="curate"><span class="hint">Your review:</span>${rev.map(([k,l])=>`<button class="seg-b" data-review="${k}" aria-pressed="${g.review===k}">${l}</button>`).join('')}
+      <span class="hint">The system never validates a gap; only you do.</span></div></section>
+  <section class="board"><div>
+    <div class="panel"><h3>Evidence</h3><p class="sub">${g.origin==='unexplored_combination'?'Inferred from what the corpus covers; no paper states this gap.':'Verified statements from the papers. Unverified model output is never used.'}</p>
+      ${g.evidence.map(e=>{const [c,l]=KIND[e.kind]||KIND.inference;return `<blockquote class="quote"><p>${esc(e.quote)}</p>
+        <cite>${e.pub?`<button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(e.pub)}">${esc(e.paper)}</button>`:esc(e.paper)}${e.page?`, p. ${esc(e.page)}`:''} <span class="chip ${c}">${l}</span></cite></blockquote>`}).join('')}</div>
+    <div class="stack-gap">${noveltyPanel(g.assessment)}</div></div>
+   <div class="side"><div class="panel"><h3>Research dimensions</h3><p class="sub">What defines the gap. The novelty check compares papers on the gap’s own dimensions; the source paper’s are context unless the gap names fewer than two.</p>
+      ${g.dimensions.map(d=>`<div class="fg"><span>${esc(d.name.replace('_',' '))}</span><b style="font-weight:400;text-align:right">${d.values.map(esc).join(', ')}<br><span class="hint">${esc(DSRC[d.source]||d.source)}${d.core?' · compared':' · context only'}</span></b></div>`).join('')||'<p class="hint">None recognised.</p>'}</div>
+    ${rankPanel(g)}</div></section>`;}
 
 /* ------------------------------------------------- Plan / proposal view */
 function verdictView(p){
@@ -584,9 +659,10 @@ function blank(){
     <ul class="flow"><li><b>Papers</b>limitations, future work and experiments are extracted</li><li><b>Gaps</b>ranked by novelty, evidence and feasibility</li><li><b>Plans</b>a hypothesis, method and circuit, verified on a simulator</li></ul>
     <div class="row"><label class="btn primary" for="file">Upload papers</label><button class="btn" data-act="sample_papers">Load 4 sample papers</button></div>
     <p class="hint" style="margin-top:12px">Sample papers are synthetic, written to demonstrate the method.</p></div></div>`;
-  if(sec==='gaps')return D.papers.length?`<div class="blank">${bloch}<div><h2>Ready to look for gaps</h2><p>${D.papers.length} paper${D.papers.length===1?'':'s'} in the library. The gap finder compares them for unstated combinations, scale limits, conflicting results and what the authors left open.</p>
-    <div class="row"><button class="btn primary" data-act="find_gaps">Find research gaps</button></div></div></div>`
-    :`<div class="blank">${bloch}<div><h2>No papers to analyse yet</h2><p>Gaps are found across papers, so add some first.</p><div class="row"><button class="btn primary" data-sec="papers">Go to papers</button></div></div></div>`;
+  if(sec==='gaps')return `<div class="blank">${bloch}<div><h2>Find research gaps</h2>
+    <p>Gaps come from what analysed papers say they could not do, left open or leave for future work, and from method and platform pairs no paper in your corpus combines. Each gap can then be checked for novelty against OpenAlex, arXiv and Crossref.</p>
+    <div class="row"><button class="btn primary" data-act="corpus_gaps" ${meta.analysed?'':'disabled'}>Find gaps in the corpus</button>${D.papers.length?`<button class="btn" data-act="find_gaps">Find gaps in uploaded papers</button>`:''}</div>
+    <p class="hint" style="margin-top:12px">${meta.analysed?`${meta.analysed} analysed paper${meta.analysed===1?'':'s'} in the corpus.`:'No analysed papers yet: open Literature and analyse some first.'}</p></div></div>`;
   if(sec==='plans')return `<div class="blank">${bloch}<div><h2>No experiment plans yet</h2><p>Open a gap and choose “Plan an experiment”. Each plan is simulated and audited straight away.</p>
     <div class="row"><button class="btn primary" data-sec="gaps">Go to gaps</button></div></div></div>`;
   return `<div class="blank">${bloch}<div><h2>No proposals waiting for review</h2><p>Upload a single experiment proposal to check its circuit and claims directly.</p>
@@ -642,6 +718,9 @@ function upload(files){
 function act(kind){
   const p=cur();
   if(kind==='find_gaps'){busy={sec:'gaps',title:'Finding research gaps',step:0};sec='gaps';render();emit({kind});return}
+  if(kind==='corpus_gaps'){busy={sec:'gaps',title:'Finding gaps in the corpus',step:0,steps:STEPS.corpus_gaps};sec='gaps';render();emit({kind});return}
+  if(kind==='novelty_check'){busy={sec:'gaps',title:`Checking the novelty of ${p.id}`,file:p.title,step:0,steps:STEPS.novelty};render();emit({kind,id:p.id});return}
+  if(kind==='gap_weights'){const weights={};document.querySelectorAll('[data-w]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))weights[i.dataset.w]=v});emit({kind,weights,id:p&&p.id});return}
   if(kind==='plan_gap'){busy={sec:'plans',title:`Planning an experiment for ${p.id}`,file:p.title,step:0};const gid=p.id;sec='plans';render();emit({kind,gap_id:gid});return}
   if(kind==='sample_papers'){const token='s'+Date.now();['A','B','C','D'].forEach((x,i)=>pending.papers.push({id:`New ${i+1}`,title:`Sample paper ${x}`,file:'synthetic sample',state:'run',step:0,token}));
     sec='papers';sel.papers=pending.papers[0].id;render();emit({kind,token});return}
@@ -658,6 +737,7 @@ document.addEventListener('click',e=>{
   const p=cur();
   if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
   if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.review){const p2=cur();if(p2)emit({kind:'gap_review',id:p2.id,status:t.dataset.review});return}
   if(t.dataset.curate){const p2=cur();if(p2)emit({kind:'lit_curate',id:p2.id,status:t.dataset.curate});return}
   if(t.dataset.litmode){litMode=t.dataset.litmode;render();$('#pane').scrollTop=0;return}
   if(t.dataset.goto){const [s,id]=t.dataset.goto.split(':');go(s,id);return}

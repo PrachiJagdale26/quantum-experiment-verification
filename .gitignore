@@ -52,6 +52,8 @@ Thumbs.db
 # Research database (local, reproducible runs)
 data/research.db
 data/research.db-*
+data/benchmark/*.db
+data/benchmark/*.db-*
 
 # Literature collection: HTTP cache and downloaded open-access full text
 data/cache/

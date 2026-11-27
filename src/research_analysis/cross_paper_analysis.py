@@ -77,7 +77,8 @@ def default_embedder() -> Callable[[List[str]], np.ndarray]:
 def load_corpus(db_url: Optional[str] = None) -> tuple:
     """(analysed records in scope, excluded count, in-scope but not analysed count)."""
     with session_scope(db_url) as s:
-        pubs = list(s.scalars(select(Publication).where(Publication.is_synthetic.is_(False))))
+        pubs = list(s.scalars(select(Publication).where(Publication.is_synthetic.is_(False),
+                                                     Publication.discovered_via == "collection")))
         excluded = sum(1 for p in pubs if p.curation_status == "excluded")
         scope = [(p.id, p.year) for p in pubs if p.curation_status != "excluded"]
         not_analysed = sum(1 for p in pubs if p.curation_status != "excluded" and p.analysed_at is None)

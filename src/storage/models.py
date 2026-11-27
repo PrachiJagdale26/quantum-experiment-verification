@@ -52,6 +52,9 @@ class Publication(Base):
                                                  doc="unreviewed | included | excluded: a researcher's corpus decision.")
     curation_note: Mapped[Optional[str]] = mapped_column(Text)
     analysed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    discovered_via: Mapped[str] = mapped_column(String(16), default="collection",
+                                                doc="collection | novelty | citation: how the work first entered the database. "
+                                                    "Only 'collection' works form the researcher's corpus.")
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     raw_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 

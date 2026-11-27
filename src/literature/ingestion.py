@@ -96,6 +96,8 @@ class LiteratureIngestor:
             s.add(run)
             for rank, rec in enumerate(res.records, 1):
                 pub, created, _ = self.upsert(s, rec)
+                if created and purpose != "collection":
+                    pub.discovered_via = purpose      # found while checking novelty: not part of the corpus
                 out.new += created
                 out.merged += not created
                 run.hits.append(SearchHit(rank=rank, publication_id=pub.id))
@@ -209,10 +211,13 @@ class LiteratureIngestor:
 # ------------------------------------------------------------------ read API
 def list_publications(db_url: Optional[str] = None, text: Optional[str] = None, year_from: Optional[int] = None,
                       year_to: Optional[int] = None, source: Optional[str] = None, availability: Optional[str] = None,
-                      include_synthetic: bool = False, limit: int = 500) -> List[Publication]:
-    """availability: 'abstract' | 'metadata_only' | 'full_text' | None."""
+                      include_synthetic: bool = False, limit: int = 500,
+                      discovered_via: Optional[str] = "collection") -> List[Publication]:
+    """availability: 'abstract' | 'metadata_only' | 'full_text' | None. discovered_via=None lists every work."""
     with session_scope(db_url) as s:
         q = select(Publication)
+        if discovered_via:
+            q = q.where(Publication.discovered_via == discovered_via)
         if not include_synthetic:
             q = q.where(Publication.is_synthetic.is_(False))
         if text:

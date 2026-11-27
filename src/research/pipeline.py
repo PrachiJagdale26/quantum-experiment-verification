@@ -35,8 +35,9 @@ class ResearchPipeline:
 
     # ------------------------------------------------------------------ gaps
     def find_gaps(self) -> List[ResearchGap]:
-        self.gaps = self.gap_finder.find([p for _, p in self.library.papers()])
-        return self.gaps
+        found = self.gap_finder.find([p for _, p in self.library.papers()])
+        self.gaps = found + [g for g in self.gaps if g.gap_id.startswith("CG-")]   # corpus gaps added for planning stay
+        return found
 
     def gap(self, gap_id: str) -> Optional[ResearchGap]:
         return next((g for g in self.gaps if g.gap_id == gap_id), None)

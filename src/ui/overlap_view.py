@@ -418,3 +418,26 @@ def build_corpus_view(result, titles: Dict[int, str]) -> Optional[Dict[str, Any]
         "method_platform": [{"row": c.row, "col": c.col, "n": len(c.publication_ids)} for c in result.method_platform],
         "method_noise": [{"row": c.row, "col": c.col, "n": len(c.publication_ids)} for c in result.method_noise],
     }
+
+
+# ----------------------------------------------------------------------------------
+# Corpus gaps and novelty investigations (Phase 4)
+# ----------------------------------------------------------------------------------
+def build_corpus_gap_view(gap, assessment: Optional[Dict[str, Any]], scores: Dict[str, dict], total: float,
+                          plan_id: Optional[str] = None) -> Dict[str, Any]:
+    from src.gap_discovery import CLASSIFICATION_LABELS, ORIGIN_LABELS, RANK_DIMENSIONS
+    a = assessment
+    return {
+        "id": f"CG-{gap.id}", "kind": "corpus", "db_id": gap.id, "title": gap.title, "statement": gap.statement,
+        "question": gap.research_question, "question_source": gap.research_question_source,
+        "origin": gap.origin, "origin_label": ORIGIN_LABELS.get(gap.origin, gap.origin), "review": gap.review_status,
+        "dimensions": [{"name": d, "values": v.values, "source": v.source, "core": d in gap.core()}
+                       for d, v in gap.dimensions.items()],
+        "evidence": [{"pub": f"PUB-{e.publication_id}" if e.publication_id else None, "paper": e.title, "quote": e.quote,
+                      "kind": e.kind, "page": e.page, "role": e.role} for e in gap.evidence],
+        "papers": len({e.publication_id for e in gap.evidence if e.publication_id}),
+        "classification": a["classification"] if a else None,
+        "class_label": CLASSIFICATION_LABELS.get(a["classification"]) if a else "Not checked yet",
+        "assessment": a, "scores": [{"key": k, "label": lbl, **scores[k]} for k, lbl in RANK_DIMENSIONS],
+        "total": total, "priority": total, "plan_id": plan_id,
+    }

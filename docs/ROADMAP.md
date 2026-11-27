@@ -1,6 +1,39 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis) **done 2026-11-28**. Next: Phase 4 (gap discovery and multi-stage novelty).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis) and Phase 4 (gap discovery and novelty) **done 2026-11-28**. Next: Phase 5 (planning with edit and approval).
+
+Phase 4 results:
+- **Gap generation (`src/gap_discovery/gap_generator.py`).** Gaps come only from verified statements (limitations, unresolved problems, future work); statements several papers share are merged into one gap. Untried method × platform and method × noise pairs become "untried in this corpus" gaps, labelled as inference.
+  - Each dimension records its source: the gap's own text, the source paper, or corpus coverage. An optional model pass rewrites gaps as research questions; it is labelled and leaves the evidence untouched.
+  - Re-running updates gaps by a stable key and never touches assessments or your review.
+- **Novelty investigation (`novelty_checker.py`).** It follows the methodology in section 3:
+  - Queries: the gap's own words, those words plus the main phenomenon, a concept query, an ontology synonym, and method- and condition-focused queries. Long queries skip arXiv, which requires every word to match.
+  - Sources: OpenAlex, arXiv and Crossref, the works citing the supporting papers, and your corpus. Every search is a stored `SearchRun`.
+  - Supporting papers are removed from the comparison. Each closest paper is compared dimension by dimension (same, different or not stated) with the sentence quoted. An optional model judge is used only when its quote is found in the abstract.
+  - The classification follows fixed rules. Low coverage gives "insufficient search coverage", never "novel". Confidence is stored with its formula and inputs.
+- **Problems the live checks exposed, fixed before measuring:**
+  1. Dimensions borrowed from a long source paper over-specified gaps, which pushes towards false novelty. A gap's own dimensions now define it; borrowed ones only top up to two.
+  2. Embedding similarity let generic titles crowd out the papers that share the question: about 40 MIPT papers were screened but none were compared. The comparison set now favours shared dimensions.
+  3. Template words and citation numbers leaked into queries.
+  4. Generic values ("entanglement") matched any paper and are now dropped when a dimension names something specific.
+- **Ranking (`gap_ranker.py`):** eight separate scores, each with a rubric and a one-line reason. Novelty comes from the classification, not from similarity. The weighted total uses weights you see and can change.
+- **Corpus separation:** works found while checking novelty are marked `discovered_via = novelty` and never enter the Literature list, corpus analysis or "Analyse next".
+- **UI:** the Gaps step lists corpus gaps by weighted total with origin and classification. Each gap shows its evidence, the dimensions it is compared on, and the full investigation: coverage, queries, the closest papers with per-dimension results and the deciding paper, evidence for and against, and uncertainty.
+  - Ranking weights can be edited; there are review buttons (candidate, validated, rejected) and "Plan an experiment", which feeds the existing planner.
+  - Checked in the browser on a copy of the corpus.
+- **Benchmark (`python evaluate.py --novelty`).** It runs on a copy of the database; the report is `data/benchmark/novelty_known_work_20261127_1949.json`. On 15 published questions from the entanglement/decoherence corpus:
+  - **False-novelty rate 0/15** (95% CI 0–0.20). All 15 were classified as already investigated.
+  - The source paper was screened in 93% of cases and compared in 87% (MRR 0.78); it decided the verdict 11 times.
+  - **Caveat:** the 15 questions have only 4 distinct dimension sets, mostly entanglement + decoherence (the corpus topic). On its own, this set cannot separate a good checker from one that always says "already investigated".
+  - **Specificity control:** 5 of 5 implausible combinations were not called already investigated (2 potentially unexplored, 3 partially). The positive control (error correction on trapped ions under depolarizing noise) was detected.
+  - Not yet measured: partially-investigated accuracy and the future-work set (both need human labels), and runs with the model judge.
+- **Known limitations:**
+  - Ontology terms have no word sense: "leakage" matches privacy leakage, and "integrated photonics" in a trapped-ion paper counts as photonic.
+  - Comparisons use abstracts, not full text.
+  - Conflicting findings are not detected yet; the class exists but no rule produces it.
+  - Side-by-side comparison of gaps is deferred to Phase 8.
+  - A stronger benchmark needs the planned 3 topics × 40 papers.
+- **Tests:** 11 new offline tests use fake collectors. They cover merging, idempotent saving, the dimension rules, already / insufficient / unexplored outcomes, supporting-paper exclusion, discarding an unverified model judgement, the own-dimension rule, ranking, and the benchmark. All 143 tests pass (offline plus live Gemini); the 3 Vertex tests are deselected because billing is disabled.
 
 Phase 3 results:
 - **Paper analysis (`src/research_analysis/paper_analyzer.py`).** Every statement (objective, method, result, limitation, unresolved problem, future work, assumption, and so on) carries provenance:
