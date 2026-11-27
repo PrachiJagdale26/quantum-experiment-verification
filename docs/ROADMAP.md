@@ -1,6 +1,14 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans), Phase 7 (orchestration), Phase 8 (reports and UI) and Phase 9 (evaluation) **done 2026-11-28**. Next: Phase 10 (README).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans), Phases 7 (orchestration), 8 (reports and UI), 9 (evaluation) and 10 (documentation) **done 2026-11-28**. All ten phases are complete; open items are listed under "Future scope" in the README and in each phase's known limitations below.
+
+Phase 10 results:
+- **`README.md`** rewritten with the 18 sections the brief asks for, from project overview and research motivation through to results, limitations and future scope. Each methodology section names the module that implements it.
+  - Results are copied from `docs/EVALUATION.md` (measured), with the caveats stated next to them.
+  - The commands it gives were run: the app, `evaluate.py --novelty`, `--all`, `--gaps` and the original benchmark, and the offline test command (154 pass). The UI labels it names were checked against the interface.
+- **`docs/VERIFICATION_ENGINE.md`**: the earlier README's reference for the original proposal-verification engine, kept unchanged with a note on its scope.
+- **`requirements.txt`**: added `scikit-learn`, which corpus analysis imports but was missing (a fresh install would have failed).
+- **`.env.example`**: documents every setting the README lists (other providers, the checkpoint file, the HTTP cache).
 
 Phase 9 results (full numbers in [docs/EVALUATION.md](EVALUATION.md)):
 - **`python evaluate.py --all`** runs every evaluation on a copy of the research database. It writes `data/benchmark/evaluation_*.json` and `docs/EVALUATION.md` with procedure, dataset size, date, software versions and limitations. Modules: `src/evaluation/{retrieval_eval, extraction_eval, gap_eval, verification_eval, labels, run_all}.py`; the novelty benchmark is Phase 4's.
