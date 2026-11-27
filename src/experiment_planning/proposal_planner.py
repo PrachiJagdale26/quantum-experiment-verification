@@ -274,6 +274,42 @@ class ProposalPlanner:
         return p
 
 
+REVISION_PROMPT = """A quantum experiment plan failed deterministic verification. Correct ONLY its circuit and predictions.
+Rules: keep the research question and method; derive predictions from quantum theory and explain the theory in
+"prediction_basis" (do not simply restate numbers from the feedback without explaining them); at most 10 qubits; gates
+H, X, Y, Z, S, T, SDG, TDG, RX/RY/RZ (with "params": [radians]), CX, CZ, SWAP; bitstrings in Qiskit order |q_{n-1}...q_0>.
+Return ONLY JSON: {"circuit": {"num_qubits": 2, "gates": [...], "expected_outcomes": [...], "prediction_basis": "...",
+"expected_state": null, "expected_outcomes_noisy": []}, "note": "<what was wrong and what changed>"}"""
+
+
+def revise_after_verification(llm, p: ResearchProposal, failed: List[str]) -> Tuple[Optional[CircuitDraft], str]:
+    """
+    One model revision of the circuit after a failed verification (the graph allows at most one).
+    Returns (circuit or None, note). The researcher must approve the revision before it is verified again.
+    """
+    if llm is None or getattr(llm, "demo_mode", True):
+        return None, "No live model: revise the plan by hand."
+    if p.circuit is None:
+        return None, "The plan has no circuit to revise."
+    user = json.dumps({"research_question": p.research_question, "hypothesis": p.hypothesis,
+                       "circuit": p.circuit.model_dump(mode="json"), "failed_checks": failed}, ensure_ascii=False)
+    try:
+        d = parse_llm_json(llm.complete(REVISION_PROMPT, user, temperature=0.0, fallback_to_demo=False,
+                                        purpose="plan_revision")) or {}
+        c = d.get("circuit") or {}
+        draft = CircuitDraft(num_qubits=int(c["num_qubits"]), gates=[GateOperation(**g) for g in c.get("gates", [])],
+                             expected_outcomes=[ExpectedOutcome(basis_state=str(o["basis_state"]),
+                                                                expected_probability=float(o["expected_probability"]))
+                                                for o in c.get("expected_outcomes", [])],
+                             prediction_basis=str(c.get("prediction_basis") or ""), expected_state=c.get("expected_state") or None,
+                             expected_outcomes_noisy=[ExpectedOutcome(basis_state=str(o["basis_state"]),
+                                                                      expected_probability=float(o["expected_probability"]))
+                                                      for o in c.get("expected_outcomes_noisy") or []])
+        return draft, str(d.get("note") or "Circuit revised after verification.")[:400]
+    except Exception as exc:
+        return None, f"The model could not revise the plan ({str(exc)[:160]}); revise it by hand."
+
+
 def missing(p: ResearchProposal) -> List[str]:
     """Required sections that are still empty, by their labels."""
     labels = {f: lbl for f, lbl, _ in SECTIONS}

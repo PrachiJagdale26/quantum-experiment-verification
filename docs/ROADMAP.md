@@ -1,6 +1,34 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval) and Phase 6 (verification of approved plans) **done 2026-11-28**. Next: Phase 7 (orchestration).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans) and Phase 7 (orchestration) **done 2026-11-28**. Next: Phase 8 (reports and UI).
+
+Phase 7 results:
+- **Research graph (`src/agents/research_graph.py`, LangGraph 1.2):** collect → analyse → find gaps → **[researcher chooses a gap]** → novelty → plan → **[researcher reviews the plan]** → verify → report.
+  - Novelty re-queries with a wider search (2× and then 3× results per query) only while coverage is below the policy, at most twice.
+  - A failed verification gets at most one model revision of the circuit, saved as a new draft revision that needs the researcher's approval again. Without a live model nothing is revised and the run says so.
+  - Every step is a plain function from Phases 2–6; the graph adds order, bounded loops, pauses, checkpoints and the log.
+- **The researcher decides, never the graph:**
+  - The gap choice is an interrupt.
+  - The plan decision is read from the database after the researcher approves or rejects it in Plans; continuing without a decision just waits again.
+  - A rejected plan ends the run.
+- **Resumable:** state is checkpointed after every node in a SQLite file (`data/checkpoints.db`, git-ignored) keyed by the run's thread.
+  - A failing node leaves the previous checkpoint intact; the failure is recorded on the run and "Retry" re-runs only that node.
+  - A `research_runs` table indexes runs (status, waiting payload, failures). Each run ends with a summary `ReportRecord`; the full report is Phase 8.
+- **Execution log:** one entry per node with its start time, duration, summary and the calls it made (sources and statuses, queries, verdicts, warnings).
+- **UI:** a "Guided run" step with:
+  - a start form (query or research area, collect or not, papers to analyse);
+  - a run list with statuses and a "!" badge in the nav while a run waits;
+  - the step list, the waiting card (choose from the ranked gaps, or open the plan and continue), Retry and Cancel;
+  - the execution log.
+- **Live check: a restart between every step.** Three separate processes ran on the scratch database:
+  1. Process A started a run and stopped at the gap choice.
+  2. Process B resumed it, checked novelty ("already investigated", 0.84) and had Gemini draft RP-6.
+  3. Process C approved RP-6 and continued: verified, passed, report written.
+  - The run then showed in the browser with its full log. A second run started from the browser paused for the gap choice, then for the plan; continuing without a decision waited again, and Cancel stopped it.
+- **Known limitations:**
+  - Steps run synchronously inside the Streamlit request, so collecting and analysing many papers blocks the page until they finish.
+  - The model revision only changes the circuit and predictions.
+- **Tests:** 4 new offline tests covering a pause and resume after a simulated restart (new graph and connection), never deciding for the researcher, bounded re-queries, a failure with retry, a rejected plan, and no revision without a model. 161 pass; the 3 Vertex tests are deselected because billing is disabled.
 
 Phase 6 results:
 - **Adapter (`src/verification/plan_verifier.py`):** an approved plan revision becomes a `ProposalSpecification`. Assumed parameters are listed as assumptions; a missing circuit stays missing, so the plan is held with the missing items listed, never filled in.

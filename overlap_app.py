@@ -35,10 +35,11 @@ from src.gap_discovery import (DEFAULT_WEIGHTS, RANK_DIMENSIONS, GapGenerator, N
 from src.experiment_planning import PlanEditError, ProposalPlanner, apply_edit, decide, list_plans, save_draft
 from src.storage import CandidateGap, Publication, session_scope
 from src.ui.overlap_view import (build_analysis_view, build_corpus_gap_view, build_corpus_view, build_gap_view,
-                                 build_paper_view, build_plan_view, build_proposal_view, build_publication_view,
+                                 build_paper_view, build_plan_view, build_proposal_view, build_publication_view, build_run_view,
                                  build_search_runs_view, build_view, overlap)
 from src.verification.engine import VerificationEngine
 from src.verification.plan_verifier import NotApproved, load_runs, verify_plan
+from src.agents.research_graph import NODE_LABELS, ResearchRunner, Services
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
 SUPPORTED = (".pdf", ".docx", ".txt")
@@ -85,6 +86,13 @@ def get_checker(_ingestor, _llm):
     return NoveltyChecker(ingestor=_ingestor, llm=_llm)
 
 
+@st.cache_resource(show_spinner=False)
+def get_runner(_ingestor, _llm, _engine):
+    """One orchestrator per server; its state lives in the SQLite checkpoint file, so it survives restarts."""
+    return ResearchRunner(Services(llm=_llm, ingestor=_ingestor, engine=_engine, analyzer=PaperAnalyzer(_llm),
+                                   checker=get_checker(_ingestor, _llm)))
+
+
 def corpus_gap_views(weights: Dict[str, float], planned: Dict[str, str]):
     """(views sorted by the researcher's weighted total, {CG-id: (gap, scores, total)})."""
     rows = {}
@@ -102,6 +110,7 @@ def research_page():
     kb, llm, engine, extractor, doc_extractor, mode = get_services()
     ingestor = get_ingestor(kb)
     analyzer = PaperAnalyzer(llm)
+    runner = get_runner(ingestor, llm, engine)
     ss = st.session_state
 
     if "pipeline" not in ss:
@@ -296,6 +305,30 @@ def research_page():
                 focus("plans", f"RP-{lin}", f"Saved as revision {plan['revision']}")
             except PlanEditError as exc:
                 focus("plans", f"RP-{lin}", f"Not saved: {exc}")
+        elif kind == "run_start":
+            to_int = lambda v: int(v) if str(v or "").strip().isdigit() else None
+            q = (ev.get("query") or "").strip() or TOPICS.get(ev.get("topic"), {}).get("query", "")
+            params = {"query": q, "collect": bool(ev.get("collect")) and bool(q),
+                      "sources": [x for x in ev.get("sources") or [] if x in ("openalex", "arxiv", "crossref")] or None,
+                      "limit": max(1, min(to_int(ev.get("limit")) or 10, 50)), "year_from": to_int(ev.get("year_from")),
+                      "analyse_n": max(0, min(to_int(ev.get("analyse_n")) or 0, 20)), "top_gaps": 8}
+            rid = runner.start(params)
+            focus("runs", f"RUN-{rid}", "Run started; its progress is saved after every step")
+        elif kind in ("run_resume", "run_retry", "run_cancel"):
+            rid = int(str(ev.get("id", "")).replace("RUN-", "") or 0)
+            try:
+                if kind == "run_resume":
+                    runner.resume(rid, ev.get("value"))
+                elif kind == "run_retry":
+                    runner.retry(rid)
+                else:
+                    runner.cancel(rid)
+                stt = runner.status(rid)["status"]
+                focus("runs", f"RUN-{rid}", {"waiting": "The run is waiting for you", "done": "Run finished",
+                                             "failed": "A step failed; you can retry it", "cancelled": "Run cancelled",
+                                             "running": "Running"}[stt])
+            except ValueError as exc:
+                focus("runs", f"RUN-{rid}", str(exc))
         elif kind == "plan_verify":
             lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
             try:
@@ -398,7 +431,9 @@ def research_page():
             "rank_dims": [{"key": k, "label": lbl} for k, lbl in RANK_DIMENSIONS],
             "analysed": sum(1 for p in literature if p["analysed"]),
             "s2_key": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")), "openalex_key": bool(os.getenv("OPENALEX_API_KEY"))}
-    overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature)
+    runs = [build_run_view(r) for r in runner.list_runs()]
+    meta["run_nodes"] = NODE_LABELS
+    overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature, runs=runs)
 
 
 BAR_CSS = """<style>

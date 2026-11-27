@@ -48,9 +48,11 @@ MISSING = {
 
 def overlap(papers: List[Dict[str, Any]], gaps: List[Dict[str, Any]], plans: List[Dict[str, Any]],
             proposals: List[Dict[str, Any]], focus: Optional[Dict[str, Any]], meta: Dict[str, Any],
-            literature: Optional[List[Dict[str, Any]]] = None, key: str = "overlap"):
+            literature: Optional[List[Dict[str, Any]]] = None, runs: Optional[List[Dict[str, Any]]] = None,
+            key: str = "overlap"):
     """Render the Literature -> Papers -> Gaps -> Plans app (plus single-proposal checking). Returns the latest UI event."""
-    return _overlap_component(literature=literature or [], papers=papers, gaps=gaps, plans=plans, proposals=proposals,
+    return _overlap_component(literature=literature or [], runs=runs or [], papers=papers, gaps=gaps, plans=plans,
+                              proposals=proposals,
                               focus=focus, meta=meta, key=key, default=None)
 
 
@@ -495,3 +497,29 @@ def _run_view(run: Dict[str, Any], current_revision: int) -> Dict[str, Any]:
     v.update(run_id=run["run_id"], revision=run["revision"], stale=run["revision"] != current_revision,
              simulator=run["simulator"], noise=run["noise"], state_fidelity=fid, feasibility=run.get("feasibility"))
     return v
+
+
+# ----------------------------------------------------------------------------------
+# Orchestrated research runs (Phase 7)
+# ----------------------------------------------------------------------------------
+def build_run_view(st: Dict[str, Any]) -> Dict[str, Any]:
+    from src.agents.research_graph import NODE_LABELS, NODES
+    done = [e["node"] for e in st["log"]]
+    failed_node = st["current"] if st["status"] == "failed" else None
+    steps = []
+    for n in NODES:
+        if n == "revise" and "revise" not in done:
+            continue                                       # only shown when a revision happened
+        state = ("failed" if n == failed_node else "waiting" if st["status"] == "waiting" and n == st["current"]
+                 else "done" if n in done else "skipped" if st["status"] in ("done", "cancelled") else "pending")
+        steps.append({"node": n, "label": NODE_LABELS[n], "state": state, "times": done.count(n)})
+    p = st["params"] or {}
+    return {
+        "id": f"RUN-{st['id']}", "run_id": st["id"], "status": st["status"], "params": p,
+        "title": p.get("query") or "Run on the existing corpus", "waiting": st["waiting"], "error": st["error"],
+        "failures": st["failures"], "steps": steps, "log": st["log"], "candidates": st.get("candidates") or [],
+        "gap_id": f"CG-{st['gap_id']}" if st.get("gap_id") else None, "novelty": st.get("novelty"),
+        "plan_id": f"RP-{st['lineage']}" if st.get("lineage") else None, "verdict": st.get("verdict"),
+        "outcome": st.get("outcome"), "revisions": st.get("revisions") or 0,
+        "created_at": st["created_at"], "updated_at": st["updated_at"],
+    }

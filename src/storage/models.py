@@ -251,6 +251,26 @@ class ReportRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+# ----------------------------------------------------------------------- research runs
+class ResearchRunRecord(Base):
+    """
+    Index of orchestrated research runs. The run's full state lives in the LangGraph SQLite checkpoint
+    (keyed by thread_id); this row is what lists, statuses and failures are read from.
+    """
+    __tablename__ = "research_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    thread_id: Mapped[str] = mapped_column(String(64), unique=True)
+    params: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="running", doc="running | waiting | done | failed")
+    current: Mapped[Optional[str]] = mapped_column(String(64), doc="Node that runs next or is waiting.")
+    waiting: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, doc="Interrupt payload while waiting for the researcher.")
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    failures: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list, doc="Failed node attempts (node, error, at).")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 # ----------------------------------------------------------------------------- audit log
 class LLMCall(Base):
     """Every LLM call: which model, live or not, success, latency. No prompts or secrets stored."""

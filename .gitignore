@@ -54,6 +54,8 @@ data/research.db
 data/research.db-*
 data/benchmark/*.db
 data/benchmark/*.db-*
+data/checkpoints.db
+data/checkpoints.db-*
 
 # Literature collection: HTTP cache and downloaded open-access full text
 data/cache/

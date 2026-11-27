@@ -31,8 +31,8 @@ button,input,textarea{font:inherit;color:inherit}
 .brand svg{width:34px;height:34px}
 .brand h1{margin:0;font-size:18px;line-height:1}
 .brand .ket{font-size:15px;color:var(--mute);margin-left:4px}
-.nav{display:flex;gap:2px;flex:1;margin-left:14px;align-items:center;flex-wrap:wrap}
-.nav button,.nav a{border:0;background:none;padding:8px 12px;border-radius:10px;font-size:14px;color:var(--mute);text-decoration:none;min-height:40px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.nav{display:flex;gap:0;flex:1;margin-left:8px;align-items:center;flex-wrap:wrap}
+.nav button,.nav a{border:0;background:none;padding:8px 9px;border-radius:10px;font-size:14px;color:var(--mute);text-decoration:none;min-height:40px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
 .nav button:hover,.nav a:hover{color:var(--ink);background:var(--rail)}
 .nav [aria-current=page]{color:var(--ink);background:var(--rail);font-weight:500}
 .nav .num{width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:12px;font-weight:500}
@@ -192,6 +192,7 @@ td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:t
 .srcs{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;margin:6px 0;display:grid;gap:6px}.srcs legend{font-size:14px;padding:0 6px}
 .cmp{width:100%;border-collapse:collapse;font-size:14px}.cmp th{text-align:left;font-weight:500;font-size:13px;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}.cmp td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}.cmp td.num{font-variant-numeric:tabular-nums}.cmp tr.decided td{background:color-mix(in srgb,var(--amp) 8%,transparent)}.tblwrap{overflow-x:auto}
 .psec{padding:8px 0;border-top:1px solid var(--rule)}.psec:first-of-type{border-top:0}.pform{display:grid;gap:14px;max-width:900px}.pe{display:grid;gap:6px;font-size:14px}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}.err{color:var(--fail)}
+.runsteps{list-style:none;padding:0;margin:0;display:grid;gap:8px}.runsteps li{display:flex;gap:8px;align-items:center;font-size:14px}.pick{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--rule)}.pick input{margin-top:5px;accent-color:var(--amp)}
 .wts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.wts label{font-size:13px;display:grid;gap:4px}
 .chk{display:flex;gap:8px;align-items:center;min-height:32px}.chk input{width:18px;height:18px;accent-color:var(--amp)}
 .hold.chip,.chip.hold{color:var(--hold)}.pass.chip,.chip.pass{color:var(--pass)}
@@ -229,7 +230,7 @@ const emit=ev=>send('streamlit:setComponentValue',{value:Object.assign({eid:Math
 
 const SECS={literature:{n:1,label:'Literature',rail:'Literature in the database'},papers:{n:2,label:'Papers',rail:'Papers in the library'},
   gaps:{n:3,label:'Gaps',rail:'Gaps, most promising first'},plans:{n:4,label:'Plans',rail:'Experiment plans'},
-  proposals:{label:'Check a proposal',rail:'Proposals to check'}};
+  proposals:{label:'Check a proposal',rail:'Proposals to check'},runs:{label:'Guided run',rail:'Research runs'}};
 const AVAIL={full_text:['pass','Full text'],abstract:['t-future_work','Abstract'],metadata_only:['hold','Metadata only']};
 const SRC_LABEL={openalex:'OpenAlex',arxiv:'arXiv',crossref:'Crossref',semantic_scholar:'Semantic Scholar'};
 const V={pass:['pass','Claims hold','|✓⟩'],fail:['fail',"Claims don't hold",'|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
@@ -245,6 +246,9 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
   corpus_gaps:['Reading verified limitations, open problems and future work','Merging statements several papers share','Finding untried method × platform and method × noise pairs','Rewriting gaps as research questions (labelled)','Saving candidates'],
   novelty:['Building queries from the gap’s dimensions and synonyms','Searching OpenAlex and Crossref','Searching arXiv (3 s between requests)','Following works that cite the supporting papers','Comparing the closest papers dimension by dimension','Classifying by fixed rules and recording coverage'],
+  run_start:['Collecting literature (if you asked)','Analysing papers','Finding and ranking gaps','Saving the run; it will wait for your gap choice'],
+  run_gap:['Checking novelty against OpenAlex, arXiv and Crossref','Re-querying with a wider search if coverage is low (at most twice)','Drafting a grounded plan','Saving the run; it will wait for your review'],
+  run_plan:['Reading your decision on the plan','Verifying by simulation if you approved it','Revising once after a failure (needs your approval)','Writing the run summary'],
   verify:['Converting the approved plan into a circuit specification','Checking structure, qubits and gates','Simulating the ideal statevector','Comparing predictions, TVD and state fidelity','Simulating the stated noise (exact density matrix)','Recording the run against this revision'],
   proposal:['Loading the gap, its evidence and its novelty investigation','Classifying feasibility by rule','Asking the model for a grounded proposal','Checking every quote against the sources','Listing what is still missing'],
   plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
@@ -252,7 +256,7 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-let D={literature:[],papers:[],gaps:[],plans:[],proposals:[]},sec='literature',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
+let D={literature:[],papers:[],gaps:[],plans:[],proposals:[],runs:[]},sec='literature',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
   tab='verdict',ptab='plan',compose=null,err='',drafts={},localDec={},running={},last=null,
   litMode='collect',railSec=null,
   litForm={topic:'noise_mitigation',query:'',year_from:'',year_to:'',limit:'25',sources:['openalex','arxiv','crossref'],doi:''},
@@ -278,7 +282,8 @@ function renderNav(){
   const step=k=>`<button data-sec="${k}" ${sec===k?'aria-current="page"':''}><span class="num">${SECS[k].n}</span>${SECS[k].label}${counts[k]?`<span class="cnt">${counts[k]}</span>`:''}</button>`;
   const arrow='<span class="arrow" aria-hidden="true">→</span>';
   $('#nav').innerHTML=`${step('literature')}${arrow}${step('papers')}${arrow}${step('gaps')}${arrow}${step('plans')}
-    <span class="sep" aria-hidden="true"></span><button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check a proposal</button>
+    <span class="sep" aria-hidden="true"></span><button data-sec="runs" ${sec==='runs'?'aria-current="page"':''}>Guided run${D.runs.some(r=>r.status==='waiting')?'<span class="cnt">!</span>':''}</button>
+    <button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check a proposal</button>
     <a id="dash" href="/dashboard">Full dashboard</a>`;
   const up=$('#uplabel');up.hidden=!(sec==='papers'||sec==='proposals');up.textContent=sec==='proposals'?'Upload proposal':'Upload papers';
   $('#file').multiple=sec==='papers';}
@@ -298,6 +303,7 @@ function row(p){
   if(sec==='gaps'&&p.kind==='corpus')return corpusGapRow(p);
   if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
     <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
+  if(sec==='runs')return runRow(p);
   if(sec==='plans'&&p.kind==='proposal')return proposalRow(p);
   const [c,t]=pstatus(p);
   return `<span class="id">${esc(p.id)}${p.revision?'<span class="chip t-future_work">Revised</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span>`;}
@@ -324,6 +330,7 @@ function renderRail(){
     papers:`<button class="link" data-act="sample_papers">Load sample papers</button><button class="link" data-act="clear_papers">Clear library</button>`,
     gaps:`<button class="link" data-act="corpus_gaps">Find gaps in the corpus</button>${D.papers.length?`<button class="link" data-act="find_gaps">Find gaps in uploaded papers</button>`:''}`,
     plans:D.plans.length?`<button class="link" id="agenda2">Download research agenda</button>`:'',
+    runs:`<button class="link" data-act="run_new">Start a run</button>`,
     proposals:`<button class="link" data-act="reload">Reload benchmark cases</button><button class="link" data-act="clear">Clear queue</button>`}[sec];
   $('#foot').innerHTML=`<p class="keys"><kbd>J</kbd> <kbd>K</kbd> move through the list</p>${foot}<p class="keys" style="margin-top:8px">${esc(meta.mode||'')}</p>`;}
 
@@ -621,6 +628,60 @@ function collectEdit(p){
   if(changes.parameters.some(r=>!r.name||!r.value))throw new Error('Every parameter needs a name and a value.');
   return changes;}
 
+/* ------------------------------------------------- Guided runs (Phase 7) */
+const RSTAT={running:['run','Running'],waiting:['hold','Waiting for you'],done:['pass','Finished'],failed:['fail','Step failed'],cancelled:['done','Cancelled']};
+const SSTATE={done:'pass',waiting:'hold',failed:'fail',pending:'done',skipped:'done'};
+let runMode=null,runPick=null;
+const runForm={query:'',topic:'',collect:false,limit:'10',analyse_n:'5',sources:['openalex','arxiv','crossref']};
+function runRow(p){const [c,l]=RSTAT[p.status]||['done',p.status];
+  return `<span class="id">${esc(p.id)}<span class="chip ${c}">${l}</span></span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.verdict?VP[p.verdict][0]:'done'}">${esc(p.outcome||(p.waiting?(p.waiting.kind==='select_gap'?'Choose a gap':'Review the plan'):(p.steps.find(s=>s.state==='failed')||{}).label||''))}</span>`;}
+function runStart(){
+  const f=runForm,topics=meta.topics||[];
+  return `<section class="hero">${fringe}<h2>Guided research run</h2>
+    <p class="lead">One run goes from literature to a verified plan, step by step. It stops twice for you, to choose a gap and to approve the plan, and it is saved after every step, so it continues after a restart.</p></section>
+  <form id="runform" class="panel form" style="max-width:720px">
+    <label for="run-query">What to research <span class="hint">(leave empty to use your existing corpus)</span></label>
+    <input id="run-query" class="in" value="${esc(f.query)}" placeholder="e.g. readout error mitigation superconducting qubits">
+    <label for="run-topic">or a research area</label><select id="run-topic" class="in"><option value="">None</option>${topics.map(t=>`<option value="${esc(t.key)}" ${t.key===f.topic?'selected':''}>${esc(t.label)}</option>`).join('')}</select>
+    <label class="chk"><input type="checkbox" id="run-collect" ${f.collect?'checked':''}> Collect new papers first (OpenAlex, arXiv, Crossref)</label>
+    <div class="lf-row"><label>Results per source<input id="run-limit" class="in" inputmode="numeric" value="${esc(f.limit)}"></label>
+      <label>Papers to analyse in this run (0–20)<input id="run-analyse" class="in" inputmode="numeric" value="${esc(f.analyse_n)}"></label></div>
+    <p class="hint">Analysing uses the language model once per paper. Gaps come from every analysed paper in the corpus.</p>
+    <p class="hint err" id="run-err" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Start the run</button>${D.runs.length?'<button class="btn" type="button" data-act="run_list">Back to runs</button>':''}</div></form>`;}
+function runView(p){
+  const [c,l]=RSTAT[p.status]||['done',p.status];
+  const pipe=`<ol class="runsteps">${p.steps.map(s=>`<li class="${SSTATE[s.state]}"><span class="chip ${SSTATE[s.state]}">${s.state==='done'?'Done':s.state==='waiting'?'Waiting for you':s.state==='failed'?'Failed':s.state==='skipped'?'Not reached':'Next'}</span> ${esc(s.label)}${s.times>1?` <span class="hint">×${s.times}</span>`:''}</li>`).join('')}</ol>`;
+  let wait='';
+  if(p.status==='waiting'&&p.waiting&&p.waiting.kind==='select_gap'){
+    const pick=runPick&&p.candidates.some(x=>`CG-${x.id}`===runPick)?runPick:`CG-${(p.candidates[0]||{}).id}`;
+    wait=`<div class="panel"><h3>Choose a gap</h3><p class="sub">${esc(p.waiting.message)} Ranked by the default weights; open one to read its evidence.</p>
+      ${p.candidates.map(x=>`<label class="pick"><input type="radio" name="rgap" value="CG-${x.id}" ${`CG-${x.id}`===pick?'checked':''}>
+        <span><b>CG-${x.id}</b> ${esc(x.title)}<br><span class="hint">${esc(x.origin.replace('_',' '))} · score ${x.total.toFixed(2)}${x.classification?` · ${esc(CLS[x.classification][1])}`:''}</span>
+        <button type="button" class="link" style="padding:0;min-height:0" data-goto="gaps:CG-${x.id}">open</button></span></label>`).join('')}
+      <div class="row" style="margin-top:12px"><button class="btn primary" data-act="run_resume_gap">Continue with this gap</button></div></div>`;}
+  else if(p.status==='waiting'&&p.waiting&&p.waiting.kind==='review_plan'){
+    wait=`<div class="panel"><h3>Review the plan</h3><p class="sub">${esc(p.waiting.message)}</p>
+      <div class="row"><button class="btn primary" data-goto="plans:${esc(p.waiting.plan_id)}">Open ${esc(p.waiting.plan_id)}</button><button class="btn" data-act="run_resume_plan">Continue the run</button></div>
+      <p class="hint">Continuing before you approve or reject simply waits again; the run never decides for you.</p></div>`;}
+  else if(p.status==='failed'){
+    wait=`<div class="panel"><h3>A step failed</h3><p class="errbox">${esc(p.error)}</p><p class="sub">Everything before it is saved. Retry re-runs only the failed step.</p>
+      <div class="row"><button class="btn primary" data-act="run_retry">Retry the step</button><button class="btn" data-act="run_cancel">Cancel the run</button></div></div>`;}
+  const results=[p.gap_id&&`<button class="link" style="padding:0;min-height:0" data-goto="gaps:${esc(p.gap_id)}">${esc(p.gap_id)}</button>`,
+    p.novelty&&`novelty: ${esc(p.novelty.label)}`,p.plan_id&&`<button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(p.plan_id)}">${esc(p.plan_id)}</button>`,
+    p.verdict&&`verdict: <b class="${VP[p.verdict][0]}">${esc(VP[p.verdict][1])}</b>`].filter(Boolean).join(' · ');
+  const log=`<div class="tblwrap"><table class="cmp"><thead><tr><th>Step</th><th>Started (UTC)</th><th>Took</th><th>What happened</th></tr></thead><tbody>
+    ${p.log.map(e=>`<tr><td>${esc(e.label)}</td><td class="num">${esc((e.started||'').slice(11,19))}</td><td class="num">${e.ms>=1000?(e.ms/1000).toFixed(1)+' s':e.ms+' ms'}</td>
+      <td>${esc(e.summary)}${e.calls&&e.calls.length?`<details><summary class="hint">${e.calls.length} call${e.calls.length===1?'':'s'}</summary><ul class="plain">${e.calls.map(x=>`<li class="hint">${esc(x)}</li>`).join('')}</ul></details>`:''}</td></tr>`).join('')}
+    ${p.failures.map(f=>`<tr><td>${esc((meta.run_nodes||{})[f.node]||f.node)}</td><td class="num">${esc((f.at||'').slice(11,19))}</td><td></td><td class="fail">Failed: ${esc(f.error)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>started ${esc((p.created_at||'').slice(0,16).replace('T',' '))} UTC</span>
+      ${p.params.collect?`<span>collects ${esc(p.params.limit)} per source</span>`:'<span>existing corpus</span>'}<span>analyses ${esc(p.params.analyse_n||0)} papers</span></div>
+    <div class="tag ${c}">${l}</div><h2>${esc(p.title)}</h2>${p.outcome?`<p class="lead">${esc(p.outcome)}.</p>`:''}${results?`<p>${results}</p>`:''}
+    <div class="act"><button class="btn" data-act="run_new">Start another run</button>${['running','waiting'].includes(p.status)?'<button class="btn" data-act="run_cancel">Cancel</button>':''}</div></section>
+  <section class="board"><div>${wait?wait+'<div class="stack-gap"></div>':''}<div class="panel"><h3>Execution log</h3><p class="sub">One row per step, with its timing and the calls it made. Saved in the run’s checkpoint.</p>${log}</div></div>
+    <div class="side"><div class="panel"><h3>Steps</h3>${pipe}<p class="hint">A re-query happens only while search coverage is low (at most twice); a revision only after a failed verification (at most once).</p></div></div></section>`;}
+
 /* ------------------------------------------------- Plan / proposal view */
 function verdictView(p){
   const isPlan=sec==='plans',[c,t,k]=(isPlan?VP:V)[p.v];
@@ -789,6 +850,7 @@ function render(){
   renderNav();renderRail();const p=cur();let html;
   if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,busy.steps||STEPS[sec],busy.step);
   else if(sec==='literature')html=litMode==='corpus'?corpusView():(litMode==='collect'||!p)?collectPanel():litView(p);
+  else if(sec==='runs')html=(runMode==='new'||!p)?runStart():runView(p);
   else if(!p)html=blank();
   else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
   else if(p.state==='bad')html=errorView(p);
@@ -807,7 +869,7 @@ window.addEventListener('message',e=>{
   const d=e.data;if(!d||d.type!=='streamlit:render')return;
   const a=d.args||{};meta=a.meta||{};
   if(d.theme&&d.theme.base)document.documentElement.dataset.theme=d.theme.base;
-  D={literature:a.literature||[],papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[]};
+  D={literature:a.literature||[],papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[],runs:a.runs||[]};
   const done=new Set(meta.done||[]);
   pending.papers=pending.papers.filter(p=>!done.has(p.token));pending.proposals=pending.proposals.filter(p=>!done.has(p.token));
   for(const id in running){const it=D[running[id].sec].find(x=>x.id===id);if(!it||it.report_id!==running[id].was){delete running[id];if(it)toast('Verification re-run')}}
@@ -815,7 +877,7 @@ window.addEventListener('message',e=>{
   if(meta.seq!==lastSeq){
     const first=lastSeq===null;lastSeq=meta.seq;busy=null;
     const f=a.focus||{};
-    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab=f.tab||'plan';
+    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab=f.tab||'plan';if(f.sec==='runs')runMode=null;
       if(f.sec==='literature')litMode=meta.lit_mode||(f.id?'detail':'collect');$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
   }
   for(const s of Object.keys(D)){const l=[...(pending[s]||[]),...D[s]];if(!l.some(x=>x.id===sel[s]))sel[s]=l[0]?.id;}
@@ -841,6 +903,13 @@ function act(kind){
   if(kind==='gap_weights'){const weights={};document.querySelectorAll('[data-w]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))weights[i.dataset.w]=v});emit({kind,weights,id:p&&p.id});return}
   if(kind==='plan_gap'&&p.kind==='corpus'){busy={sec:'plans',title:`Drafting a proposal for ${p.id}`,file:p.title,step:0,steps:STEPS.proposal};sec='plans';render();emit({kind,gap_id:p.id});return}
   if(kind==='plan_redraft'){busy={sec:'plans',title:`Drafting a new proposal for ${p.gap_id}`,file:p.gap_title,step:0,steps:STEPS.proposal};render();emit({kind,gap_id:p.gap_id});return}
+  if(kind==='run_new'){runMode='new';render();return}
+  if(kind==='run_list'){runMode=null;render();return}
+  if(kind==='run_resume_gap'){const v=(document.querySelector('input[name=rgap]:checked')||{}).value;if(!v){toast('Choose a gap first.');return}
+    busy={sec:'runs',title:`Investigating ${v}`,file:p.title,step:0,steps:STEPS.run_gap};render();emit({kind:'run_resume',id:p.id,value:v});return}
+  if(kind==='run_resume_plan'){busy={sec:'runs',title:'Continuing the run',file:p.title,step:0,steps:STEPS.run_plan};render();emit({kind:'run_resume',id:p.id,value:'continue'});return}
+  if(kind==='run_retry'){busy={sec:'runs',title:'Retrying the failed step',file:p.title,step:0,steps:STEPS.run_gap};render();emit({kind,id:p.id});return}
+  if(kind==='run_cancel'){emit({kind,id:p.id});return}
   if(kind==='plan_verify'){busy={sec:'plans',title:`Verifying ${p.id}, revision ${p.revision}`,file:p.title,step:0,steps:STEPS.verify};ptab='verdict';render();emit({kind,id:p.id});return}
   if(kind==='plan_edit_open'){editing=p.id;render();$('#pane').scrollTop=0;return}
   if(kind==='plan_edit_cancel'){editing=null;render();return}
@@ -869,7 +938,7 @@ document.addEventListener('click',e=>{
   if(t.dataset.litmode){litMode=t.dataset.litmode;render();$('#pane').scrollTop=0;return}
   if(t.dataset.goto){const [s,id]=t.dataset.goto.split(':');go(s,id);return}
   if(t.dataset.act){act(t.dataset.act);return}
-  if(t.dataset.id){sel[sec]=t.dataset.id;if(sec==='literature')litMode='detail';compose=null;err='';render();$('#pane').scrollTop=0;return}
+  if(t.dataset.id){sel[sec]=t.dataset.id;if(sec==='literature')litMode='detail';if(sec==='runs')runMode=null;compose=null;err='';render();$('#pane').scrollTop=0;return}
   if(t.dataset.tab){if(sec==='plans')ptab=t.dataset.tab;else tab=t.dataset.tab;render();$(`#t-${t.dataset.tab}`)?.focus();return}
   switch(t.id){
     case 'sample':{const token='s'+Date.now();pending.proposals.unshift({id:'New',title:'sample bell state proposal',file:'sample_bell_state_proposal.pdf',state:'run',step:0,token});sel.proposals='New';render();emit({kind:'sample',token});break}
@@ -918,6 +987,13 @@ function litSubmit(form){
 document.addEventListener('input',e=>{if(e.target.id==='msg'){drafts[sel[sec]]=e.target.value;
   if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
 document.addEventListener('submit',e=>{e.preventDefault();
+  if(e.target.id==='runform'){const f=runForm;f.query=$('#run-query').value.trim();f.topic=$('#run-topic').value;f.collect=$('#run-collect').checked;
+    f.limit=$('#run-limit').value.trim();f.analyse_n=$('#run-analyse').value.trim();
+    const bad=[f.limit,f.analyse_n].some(v=>v!==''&&!/^\d+$/.test(v));
+    if(bad){const el=$('#run-err');el.textContent='Use whole numbers for the counts.';el.hidden=false;return}
+    if(f.collect&&!f.query&&!f.topic){const el=$('#run-err');el.textContent='To collect papers, enter what to research or choose an area.';el.hidden=false;return}
+    runMode=null;busy={sec:'runs',title:'Starting the run',file:f.query||((meta.topics||[]).find(t=>t.key===f.topic)||{}).label||'existing corpus',step:0,steps:STEPS.run_start};render();
+    emit({kind:'run_start',query:f.query,topic:f.topic,collect:f.collect,limit:f.limit,analyse_n:f.analyse_n,sources:f.sources});return}
   if(e.target.id==='peform'){const p=cur();let changes;
     try{changes=collectEdit(p)}catch(err2){const el=$('#pe-err');el.textContent=err2.message;el.hidden=false;return}
     emit({kind:'plan_edit',id:p.id,changes,note:$('#penote').value});editing=null;toast('Saving…');return}
