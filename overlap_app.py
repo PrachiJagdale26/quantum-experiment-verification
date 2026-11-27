@@ -224,8 +224,11 @@ def research_page():
     gaps = [build_gap_view(g, planned.get(g.gap_id)) for g in pipe.gaps]
     plans = [build_plan_view(plan, pipe.reports[pid], gap_titles.get(plan.gap_id, plan.gap_id), ss.plan_times.get(pid, ""))
              for pid, plan in reversed(list(pipe.plans.items())) if pid in pipe.reports]
+    if getattr(llm, "last_model_used", None) and llm.last_model_used != llm.model_name:
+        mode = f"{mode} (last answer from fallback {llm.last_model_used})"
     if llm.live_failure:
         mode = f"LLM: {llm.live_failure}. Using rule-based analysis."
+    mode = f"{mode} | {kb.describe()}"
     meta = {"mode": mode, "seq": ss.seq, "done": ss.done, "agenda": pipe.agenda_markdown() if pipe.gaps else ""}
     overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta)
 

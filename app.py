@@ -209,6 +209,10 @@ with st.sidebar:
     st.subheader("Engine Diagnostics")
     st.write(f"**Qiskit Simulator**: {'Available (v2.6.1)' if HAS_QISKIT else 'NumPy Tensor Engine'}")
     st.write(f"**Literature Passages**: {kb.count()} indexed chunks")
+    if kb.is_semantic:
+        st.write(f"**Retrieval**: {kb.describe()}")
+    else:
+        st.warning(f"**Retrieval is degraded**: {kb.describe()}")
     st.write(f"**Supported Documents**: PDF (.pdf) & Word (.docx)")
 
     st.markdown("---")

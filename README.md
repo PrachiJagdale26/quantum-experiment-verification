@@ -99,7 +99,7 @@ AI-Based Verification of Quantum Experiment Proposals/
 │   │   └── chunker.py            # Traceable overlapping chunker with page & chunk ID provenance
 │   ├── knowledge_base/           # Literature vector store & RAG
 │   │   ├── starter_corpus.py     # Verified reference literature (Nielsen & Chuang, Bell 1964, Grover 1996, Preskill 2018)
-│   │   ├── vector_store.py       # ChromaDB + SentenceTransformers + Local Cosine Vector Fallback
+│   │   ├── vector_store.py       # ChromaDB (cosine) + Sentence-Transformers; word-match fallback reported as degraded
 │   │   └── retriever.py          # Semantic & lexical query retriever producing traceable citations
 │   ├── circuit/                  # Computational quantum circuit simulation
 │   │   ├── parser.py             # Circuit DSL parser, gate arity, and qubit bounds validation
@@ -241,26 +241,36 @@ python -m venv --system-site-packages .venv
 ### Step 3: Configure Environment Variables
 Configure your credentials in the local `.env` file (excluded from git):
 ```env
-# Google Cloud Vertex AI Configuration (Primary Provider via Service Account ADC)
-LLM_PROVIDER=vertex
-GOOGLE_APPLICATION_CREDENTIALS=C:\GoogleCloudCredentials\vertex-service-account.json
-VERTEX_PROJECT_ID=acquired-winter-511114-c2
+# LLM: Gemini API (Google AI Studio key) is the primary provider
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-3.8-flash
+# Tried in order when GEMINI_MODEL is overloaded (503) or rate-limited (429)
+GEMINI_FALLBACK_MODELS=gemini-flash-latest,gemini-flash-lite-latest,gemini-3.1-flash-lite
+
+# Optional: Google Cloud Vertex AI instead (LLM_PROVIDER=vertex; needs billing enabled on the project)
+GOOGLE_APPLICATION_CREDENTIALS=path\to\service-account.json
+VERTEX_PROJECT_ID=your-project-id
 VERTEX_LOCATION=global
 VERTEX_MODEL=gemini-3.8-flash
 
-# Google Gemini API Fallback (Google AI Studio)
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.8-flash
+# Knowledge base (ChromaDB + Sentence-Transformers)
+EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
+CHROMA_PERSIST_DIRECTORY=./chroma_db
+KB_REQUIRE_SEMANTIC=0          # 1 = refuse to start if semantic retrieval is unavailable
+
+# Research database (publications, searches, gaps, assessments, approvals, LLM call log)
+RESEARCH_DB_URL=sqlite:///data/research.db
 ```
 
-Supported LLM providers (Google Cloud Vertex AI configured as primary provider):
-- **Google Cloud Vertex AI** (Primary): Official `google-genai` SDK using `gemini-3.8-flash` via Service Account Application Default Credentials (ADC) JSON.
-- **Google Gemini API**: Official `google-genai` SDK using API key from Google AI Studio.
-- `OPENAI_API_KEY` (e.g. `gpt-4o`)
-- `ANTHROPIC_API_KEY` (e.g. `claude-3-5-sonnet-20241022`)
-- `LLM_API_KEY` + `LLM_BASE_URL` (local or OpenAI-compatible server)
+Supported LLM providers:
+- **Google Gemini API** (primary): official `google-genai` SDK with an AI Studio key, with model fallback and short-term cool-down of overloaded models.
+- **Google Cloud Vertex AI**: the same SDK with a service account (requires billing on the project).
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `LLM_API_KEY` + `LLM_BASE_URL` (OpenAI-compatible).
 
-*Note: If credentials are not present or external connectivity is unavailable, the system automatically falls back to deterministic extraction and local Qiskit statevector simulation without crashing.*
+**Provenance of LLM output.** Every call records which provider and model actually answered and whether the output was live or demo (`ConfigurableLLMClient.last_call`). The call is also logged in the research database's `llm_calls` table, with model, live flag, success and latency, plus a prompt hash; no prompt text or keys are stored. Paper and proposal analysis never use canned demo answers. When no live model is available they fall back to rule-based extraction from the document itself and say so in `extraction_warnings`.
+
+**Knowledge base status.** Retrieval runs on ChromaDB (cosine distance) with Sentence-Transformers embeddings, using one collection per embedding model. If either library is missing, the knowledge base degrades to word matching. It then says so in the UI and logs, and with `KB_REQUIRE_SEMANTIC=1` it refuses to start. *Correction:* before Phase 1 (2026-11-27), ChromaDB and Sentence-Transformers were listed but not installed, so all earlier retrieval used word matching, not semantic search.
 
 ---
 
