@@ -49,9 +49,10 @@ MISSING = {
 def overlap(papers: List[Dict[str, Any]], gaps: List[Dict[str, Any]], plans: List[Dict[str, Any]],
             proposals: List[Dict[str, Any]], focus: Optional[Dict[str, Any]], meta: Dict[str, Any],
             literature: Optional[List[Dict[str, Any]]] = None, runs: Optional[List[Dict[str, Any]]] = None,
-            key: str = "overlap"):
+            reports: Optional[List[Dict[str, Any]]] = None, key: str = "overlap"):
     """Render the Literature -> Papers -> Gaps -> Plans app (plus single-proposal checking). Returns the latest UI event."""
-    return _overlap_component(literature=literature or [], runs=runs or [], papers=papers, gaps=gaps, plans=plans,
+    return _overlap_component(literature=literature or [], runs=runs or [], reports=reports or [], papers=papers, gaps=gaps,
+                              plans=plans,
                               proposals=proposals,
                               focus=focus, meta=meta, key=key, default=None)
 
@@ -523,3 +524,44 @@ def build_run_view(st: Dict[str, Any]) -> Dict[str, Any]:
         "outcome": st.get("outcome"), "revisions": st.get("revisions") or 0,
         "created_at": st["created_at"], "updated_at": st["updated_at"],
     }
+
+
+# ----------------------------------------------------------------------------------
+# Overview and reports (Phase 8)
+# ----------------------------------------------------------------------------------
+def build_overview(literature: List[Dict[str, Any]], gaps: List[Dict[str, Any]], plans: List[Dict[str, Any]],
+                   runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    from collections import Counter
+    corpus_gaps = [g for g in gaps if g.get("kind") == "corpus"]
+    props = [p for p in plans if p.get("kind") == "proposal"]
+    verdicts = Counter(p["verification"]["v"] for p in props if p.get("verification") and not p["verification"]["stale"])
+    return {
+        "id": "OVERVIEW", "kind": "overview", "title": "Overview",
+        "stages": [
+            {"key": "literature", "label": "Literature", "main": len(literature),
+             "detail": f"{sum(1 for p in literature if p['analysed'])} analysed · "
+                       f"{sum(1 for p in literature if p['availability'] == 'full_text')} full text · "
+                       f"{sum(1 for p in literature if p['curation'] == 'excluded')} excluded"},
+            {"key": "gaps", "label": "Gaps", "main": len(corpus_gaps),
+             "detail": " · ".join(f"{n} {k.lower()}" for k, n in Counter(g["class_label"] for g in corpus_gaps).most_common())
+                       or "none yet"},
+            {"key": "plans", "label": "Plans", "main": len(props),
+             "detail": " · ".join(f"{n} {k}" for k, n in Counter(p["status"] for p in props).most_common()) or "none yet"},
+            {"key": "verified", "label": "Verified", "main": sum(verdicts.values()),
+             "detail": " · ".join(f"{n} {k}" for k, n in verdicts.most_common()) or "none yet"},
+            {"key": "runs", "label": "Guided runs", "main": len(runs),
+             "detail": " · ".join(f"{n} {k}" for k, n in Counter(r["status"] for r in runs).most_common()) or "none yet"},
+        ],
+        "waiting": [{"id": r["id"], "kind": r["waiting"]["kind"]} for r in runs if r["status"] == "waiting" and r.get("waiting")],
+        "to_review": [p["id"] for p in props if p["status"] == "draft"],
+        "to_verify": [p["id"] for p in props if p["status"] == "approved" and (not p.get("verification") or p["verification"]["stale"])],
+    }
+
+
+def build_report_item(p: Dict[str, Any], cached: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    v = p.get("verification")
+    return {"id": p["id"], "kind": "report", "title": p["title"], "status": p["status"], "revision": p["revision"],
+            "verdict": v["v"] if v and not v["stale"] else None, "gap_id": p["gap_id"],
+            "report": cached.get("report") if cached else None, "md": cached.get("md") if cached else None,
+            "json": cached.get("json") if cached else None, "pdf": cached.get("pdf_b64") if cached else None,
+            "built_for_revision": cached["report"]["revision"] if cached else None}

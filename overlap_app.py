@@ -35,11 +35,13 @@ from src.gap_discovery import (DEFAULT_WEIGHTS, RANK_DIMENSIONS, GapGenerator, N
 from src.experiment_planning import PlanEditError, ProposalPlanner, apply_edit, decide, list_plans, save_draft
 from src.storage import CandidateGap, Publication, session_scope
 from src.ui.overlap_view import (build_analysis_view, build_corpus_gap_view, build_corpus_view, build_gap_view,
-                                 build_paper_view, build_plan_view, build_proposal_view, build_publication_view, build_run_view,
+                                 build_overview, build_paper_view, build_plan_view, build_proposal_view, build_publication_view,
+                                 build_report_item, build_run_view,
                                  build_search_runs_view, build_view, overlap)
 from src.verification.engine import VerificationEngine
 from src.verification.plan_verifier import NotApproved, load_runs, verify_plan
 from src.agents.research_graph import NODE_LABELS, ResearchRunner, Services
+from src.reporting.research_report import build_report, save_report
 
 SAMPLE_DOC = os.path.join(ROOT, "data", "sample_proposals", "sample_bell_state_proposal.pdf")
 SUPPORTED = (".pdf", ".docx", ".txt")
@@ -329,6 +331,13 @@ def research_page():
                                              "running": "Running"}[stt])
             except ValueError as exc:
                 focus("runs", f"RUN-{rid}", str(exc))
+        elif kind == "report_build":
+            lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
+            rep = build_report(lin)
+            out = save_report(rep)
+            ss.setdefault("reports", {})[lin] = {"report": rep, "md": out["md"], "json": out["json"],
+                                                 "pdf_b64": base64.b64encode(out["pdf"]).decode("ascii")}
+            focus("reports", f"RP-{lin}", f"Report for RP-{lin} built: 17 sections, {len(rep['references'])} references")
         elif kind == "plan_verify":
             lin = int(str(ev.get("id", "")).replace("RP-", "") or 0)
             try:
@@ -433,7 +442,11 @@ def research_page():
             "s2_key": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")), "openalex_key": bool(os.getenv("OPENALEX_API_KEY"))}
     runs = [build_run_view(r) for r in runner.list_runs()]
     meta["run_nodes"] = NODE_LABELS
-    overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature, runs=runs)
+    cache = ss.get("reports") or {}
+    reports = [build_overview(literature, gaps, plans, runs)] + [
+        build_report_item(p, cache.get(p["lineage"])) for p in plans if p.get("kind") == "proposal"]
+    overlap(papers, gaps, plans, [proposal_view(x) for x in ss.queue], ss.focus, meta, literature=literature, runs=runs,
+            reports=reports)
 
 
 BAR_CSS = """<style>

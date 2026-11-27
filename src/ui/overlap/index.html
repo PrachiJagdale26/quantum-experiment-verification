@@ -193,6 +193,16 @@ td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:t
 .cmp{width:100%;border-collapse:collapse;font-size:14px}.cmp th{text-align:left;font-weight:500;font-size:13px;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}.cmp td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}.cmp td.num{font-variant-numeric:tabular-nums}.cmp tr.decided td{background:color-mix(in srgb,var(--amp) 8%,transparent)}.tblwrap{overflow-x:auto}
 .psec{padding:8px 0;border-top:1px solid var(--rule)}.psec:first-of-type{border-top:0}.pform{display:grid;gap:14px;max-width:900px}.pe{display:grid;gap:6px;font-size:14px}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}.err{color:var(--fail)}
 .runsteps{list-style:none;padding:0;margin:0;display:grid;gap:8px}.runsteps li{display:flex;gap:8px;align-items:center;font-size:14px}.pick{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--rule)}.pick input{margin-top:5px;accent-color:var(--amp)}
+.ovgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}.ovcard{display:grid;gap:6px;text-align:left;cursor:pointer;font:inherit;color:inherit}.ovcard:hover{border-color:var(--amp)}
+.pvlegend{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}.pv{font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.pv-quote{color:var(--pass);background:color-mix(in srgb,var(--pass) 14%,transparent)}.pv-generated{color:var(--hold);background:color-mix(in srgb,var(--hold) 14%,transparent)}
+.pv-computed{color:var(--amp);background:color-mix(in srgb,var(--amp) 14%,transparent)}.pv-inference{color:#a78bfa;background:color-mix(in srgb,#a78bfa 14%,transparent)}
+.pv-researcher{color:#2dd4bf;background:color-mix(in srgb,#2dd4bf 14%,transparent)}.pv-metadata{color:var(--mute);background:color-mix(in srgb,var(--mute) 14%,transparent)}
+.pvi{margin:0 0 8px;padding:6px 0 6px 12px;border-left:3px solid var(--rule)}.pvi-quote{border-left-color:var(--pass)}.pvi-generated{border-left:3px dashed var(--hold);font-style:italic}
+.pvi-researcher{border-left-color:#2dd4bf}.pvi-inference{border-left-color:#a78bfa}
+.rgrid{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}.pvtoc{position:sticky;top:0;display:grid;gap:2px;font-size:13px}.pvtoc a{color:var(--mute);text-decoration:none;padding:4px 6px;border-radius:8px}.pvtoc a:hover{background:var(--rail);color:var(--ink)}
+.rbody{display:grid;gap:14px}.rsec h3{margin-top:0}.refs{padding-left:24px;font-size:14px}.refs li{margin:6px 0}
+@media(max-width:900px){.rgrid{grid-template-columns:1fr}.pvtoc{position:static}}
 .wts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.wts label{font-size:13px;display:grid;gap:4px}
 .chk{display:flex;gap:8px;align-items:center;min-height:32px}.chk input{width:18px;height:18px;accent-color:var(--amp)}
 .hold.chip,.chip.hold{color:var(--hold)}.pass.chip,.chip.pass{color:var(--pass)}
@@ -230,7 +240,7 @@ const emit=ev=>send('streamlit:setComponentValue',{value:Object.assign({eid:Math
 
 const SECS={literature:{n:1,label:'Literature',rail:'Literature in the database'},papers:{n:2,label:'Papers',rail:'Papers in the library'},
   gaps:{n:3,label:'Gaps',rail:'Gaps, most promising first'},plans:{n:4,label:'Plans',rail:'Experiment plans'},
-  proposals:{label:'Check a proposal',rail:'Proposals to check'},runs:{label:'Guided run',rail:'Research runs'}};
+  proposals:{label:'Check a proposal',rail:'Proposals to check'},runs:{label:'Guided run',rail:'Research runs'},reports:{label:'Reports',rail:'Overview and reports'}};
 const AVAIL={full_text:['pass','Full text'],abstract:['t-future_work','Abstract'],metadata_only:['hold','Metadata only']};
 const SRC_LABEL={openalex:'OpenAlex',arxiv:'arXiv',crossref:'Crossref',semantic_scholar:'Semantic Scholar'};
 const V={pass:['pass','Claims hold','|✓⟩'],fail:['fail',"Claims don't hold",'|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
@@ -246,6 +256,7 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
   gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
   corpus_gaps:['Reading verified limitations, open problems and future work','Merging statements several papers share','Finding untried method × platform and method × noise pairs','Rewriting gaps as research questions (labelled)','Saving candidates'],
   novelty:['Building queries from the gap’s dimensions and synonyms','Searching OpenAlex and Crossref','Searching arXiv (3 s between requests)','Following works that cite the supporting papers','Comparing the closest papers dimension by dimension','Classifying by fixed rules and recording coverage'],
+  report:['Gathering the plan, its gap and its novelty investigation','Summarising the corpus and its themes','Adding verification and simulation results','Labelling every statement by provenance','Writing Markdown, JSON and PDF'],
   run_start:['Collecting literature (if you asked)','Analysing papers','Finding and ranking gaps','Saving the run; it will wait for your gap choice'],
   run_gap:['Checking novelty against OpenAlex, arXiv and Crossref','Re-querying with a wider search if coverage is low (at most twice)','Drafting a grounded plan','Saving the run; it will wait for your review'],
   run_plan:['Reading your decision on the plan','Verifying by simulation if you approved it','Revising once after a failure (needs your approval)','Writing the run summary'],
@@ -256,7 +267,7 @@ const STEPS={analysis:['Reading the abstract or full text','Asking the model for
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-let D={literature:[],papers:[],gaps:[],plans:[],proposals:[],runs:[]},sec='literature',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
+let D={literature:[],papers:[],gaps:[],plans:[],proposals:[],runs:[],reports:[]},sec='literature',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
   tab='verdict',ptab='plan',compose=null,err='',drafts={},localDec={},running={},last=null,
   litMode='collect',railSec=null,
   litForm={topic:'noise_mitigation',query:'',year_from:'',year_to:'',limit:'25',sources:['openalex','arxiv','crossref'],doi:''},
@@ -283,8 +294,9 @@ function renderNav(){
   const arrow='<span class="arrow" aria-hidden="true">→</span>';
   $('#nav').innerHTML=`${step('literature')}${arrow}${step('papers')}${arrow}${step('gaps')}${arrow}${step('plans')}
     <span class="sep" aria-hidden="true"></span><button data-sec="runs" ${sec==='runs'?'aria-current="page"':''}>Guided run${D.runs.some(r=>r.status==='waiting')?'<span class="cnt">!</span>':''}</button>
-    <button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check a proposal</button>
-    <a id="dash" href="/dashboard">Full dashboard</a>`;
+    <button data-sec="reports" ${sec==='reports'?'aria-current="page"':''}>Reports</button>
+    <button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check proposal</button>
+    <a id="dash" href="/dashboard" title="The original full dashboard">Dashboard</a>`;
   const up=$('#uplabel');up.hidden=!(sec==='papers'||sec==='proposals');up.textContent=sec==='proposals'?'Upload proposal':'Upload papers';
   $('#file').multiple=sec==='papers';}
 const decided=p=>p.id in localDec?localDec[p.id]:!!p.dec;
@@ -304,6 +316,7 @@ function row(p){
   if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
     <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
   if(sec==='runs')return runRow(p);
+  if(sec==='reports')return reportRow(p);
   if(sec==='plans'&&p.kind==='proposal')return proposalRow(p);
   const [c,t]=pstatus(p);
   return `<span class="id">${esc(p.id)}${p.revision?'<span class="chip t-future_work">Revised</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span>`;}
@@ -331,6 +344,7 @@ function renderRail(){
     gaps:`<button class="link" data-act="corpus_gaps">Find gaps in the corpus</button>${D.papers.length?`<button class="link" data-act="find_gaps">Find gaps in uploaded papers</button>`:''}`,
     plans:D.plans.length?`<button class="link" id="agenda2">Download research agenda</button>`:'',
     runs:`<button class="link" data-act="run_new">Start a run</button>`,
+    reports:'',
     proposals:`<button class="link" data-act="reload">Reload benchmark cases</button><button class="link" data-act="clear">Clear queue</button>`}[sec];
   $('#foot').innerHTML=`<p class="keys"><kbd>J</kbd> <kbd>K</kbd> move through the list</p>${foot}<p class="keys" style="margin-top:8px">${esc(meta.mode||'')}</p>`;}
 
@@ -682,6 +696,44 @@ function runView(p){
   <section class="board"><div>${wait?wait+'<div class="stack-gap"></div>':''}<div class="panel"><h3>Execution log</h3><p class="sub">One row per step, with its timing and the calls it made. Saved in the run’s checkpoint.</p>${log}</div></div>
     <div class="side"><div class="panel"><h3>Steps</h3>${pipe}<p class="hint">A re-query happens only while search coverage is low (at most twice); a revision only after a failed verification (at most once).</p></div></div></section>`;}
 
+/* ------------------------------------------------ Overview and reports (Phase 8) */
+const PV={quote:'Verified quote',generated:'Model-generated',computed:'Computed',inference:'Inference across papers',researcher:'Researcher',metadata:'Metadata'};
+function reportRow(p){
+  if(p.kind==='overview')return `<span class="id">Overview</span><span class="t">The investigation at a glance</span>`;
+  const [c,l]=PSTAT[p.status];
+  return `<span class="id">${esc(p.id)}<span class="chip ${c}">${l}</span>${p.verdict?`<span class="chip ${VP[p.verdict][0]}">${esc(VP[p.verdict][1])}</span>`:''}</span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.report?'pass':'done'}">${p.report?`Report built (revision ${p.built_for_revision})`:'No report yet'}</span>`;}
+function overviewView(o){
+  const go=k=>({literature:'literature',gaps:'gaps',plans:'plans',verified:'plans',runs:'runs'})[k];
+  const todo=[...o.waiting.map(w=>`<li><button class="link" style="padding:0;min-height:0" data-goto="runs:${esc(w.id)}">${esc(w.id)}</button> is waiting for you to ${w.kind==='select_gap'?'choose a gap':'review its plan'}.</li>`),
+    ...o.to_review.map(id=>`<li><button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(id)}">${esc(id)}</button> is a draft: edit it, then approve or reject it.</li>`),
+    ...o.to_verify.map(id=>`<li><button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(id)}">${esc(id)}</button> is approved but not verified on its current revision.</li>`)];
+  return `<section class="hero">${fringe}<h2>Overview</h2><p class="lead">Where the investigation stands, from collected literature to verified plans. Reports are built per plan from what is stored, with every statement labelled by where it came from.</p></section>
+  <div class="ovgrid">${o.stages.map(s=>`<button class="panel ovcard" data-sec="${go(s.key)}"><span class="hint">${esc(s.label)}</span><span class="big">${s.main}</span><span class="hint">${esc(s.detail)}</span></button>`).join('')}</div>
+  <div class="stack-gap"><div class="panel"><h3>Needs your attention</h3>${todo.length?`<ul class="plain">${todo.join('')}</ul>`:'<p class="hint" style="margin:0">Nothing is waiting for you.</p>'}</div></div>`;}
+function reportView(p){
+  const r=p.report,[c,l]=PSTAT[p.status];
+  const head=`<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(p.id)}">Open the plan</button><span>Revision ${p.revision}</span></div>
+    <div class="tag ${c}">${l}</div><h2>${esc(r?r.title:p.title)}</h2>
+    <div class="act"><button class="btn ${r?'':'primary'}" data-act="report_build">${r?'Rebuild report':'Build report'}</button>
+      ${r?`<button class="btn primary" data-rdl="pdf">Download PDF</button><button class="btn" data-rdl="md">Markdown</button><button class="btn" data-rdl="json">JSON</button>`:''}</div>
+    ${r&&p.built_for_revision!==p.revision?`<p class="callout">This report describes revision ${p.built_for_revision}; the plan is now at revision ${p.revision}. Rebuild it.</p>`:''}
+    ${!r?'<p class="hint">The report has the 17 sections of a research investigation: domain, collection, papers, themes, comparison, gaps, novelty, evidence, closest work, the selected gap, question and hypothesis, plan, verification, simulation, limitations, approval and references.</p>':''}</section>`;
+  if(!r)return head;
+  const legend=`<p class="pvlegend">${Object.entries(PV).map(([k,v])=>`<span class="pv pv-${k}">${esc(v)}</span>`).join(' ')}<span class="hint"> Only verified quotes are taken word for word from a source; model-generated text is a draft to check.</span></p>`;
+  const toc=`<nav class="pvtoc">${r.sections.map(s=>`<a href="#rs-${s.n}">${s.n}. ${esc(s.title)}</a>`).join('')}</nav>`;
+  const refLink=x=>x.doi_url||x.arxiv_url||x.url;
+  const body=r.sections.map(s=>`<section class="panel rsec" id="rs-${s.n}"><h3>${s.n}. ${esc(s.title)}</h3>
+    ${s.items.map(it=>`<p class="pvi pvi-${it.kind}"><span class="pv pv-${it.kind}">${esc(PV[it.kind])}${it.kind==='generated'&&it.source?` · ${esc(it.source)}`:''}</span> ${esc(it.text)}${it.refs?` <span class="hint">${esc(it.refs)}</span>`:''}</p>`).join('')}
+    ${s.tables.filter(t=>t.rows.length).map(t=>`<div class="tblwrap"><table class="cmp"><thead><tr>${t.columns.map(c2=>`<th>${esc(c2)}</th>`).join('')}</tr></thead><tbody>${t.rows.map(row=>`<tr>${row.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('')}
+    ${s.n===17?`<ol class="refs">${r.references.map(x=>`<li value="${x.n}">${esc(x.authors?x.authors+', ':'')}${esc(x.title)}${x.venue?`, <i>${esc(x.venue)}</i>`:''} (${esc(x.year||'n.d.')}). ${refLink(x)?`<a href="${esc(refLink(x))}" target="_blank" rel="noopener">${esc(x.doi?'doi:'+x.doi:refLink(x))}</a>`:''}</li>`).join('')}</ol>`:''}</section>`).join('');
+  return head+legend+`<div class="rgrid">${toc}<div class="rbody">${body}</div></div>`;}
+function downloadReport(p,fmt){
+  const name=`${p.id}-rev${p.built_for_revision}-report.${fmt}`;
+  if(fmt==='pdf'){const bin=atob(p.pdf),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([fmt==='md'?p.md:p.json],{type:fmt==='md'?'text/markdown':'application/json'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);}
+
 /* ------------------------------------------------- Plan / proposal view */
 function verdictView(p){
   const isPlan=sec==='plans',[c,t,k]=(isPlan?VP:V)[p.v];
@@ -851,6 +903,7 @@ function render(){
   if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,busy.steps||STEPS[sec],busy.step);
   else if(sec==='literature')html=litMode==='corpus'?corpusView():(litMode==='collect'||!p)?collectPanel():litView(p);
   else if(sec==='runs')html=(runMode==='new'||!p)?runStart():runView(p);
+  else if(sec==='reports')html=!p||p.kind==='overview'?overviewView(p||D.reports[0]||{stages:[],waiting:[],to_review:[],to_verify:[]}):reportView(p);
   else if(!p)html=blank();
   else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
   else if(p.state==='bad')html=errorView(p);
@@ -869,7 +922,7 @@ window.addEventListener('message',e=>{
   const d=e.data;if(!d||d.type!=='streamlit:render')return;
   const a=d.args||{};meta=a.meta||{};
   if(d.theme&&d.theme.base)document.documentElement.dataset.theme=d.theme.base;
-  D={literature:a.literature||[],papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[],runs:a.runs||[]};
+  D={literature:a.literature||[],papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[],runs:a.runs||[],reports:a.reports||[]};
   const done=new Set(meta.done||[]);
   pending.papers=pending.papers.filter(p=>!done.has(p.token));pending.proposals=pending.proposals.filter(p=>!done.has(p.token));
   for(const id in running){const it=D[running[id].sec].find(x=>x.id===id);if(!it||it.report_id!==running[id].was){delete running[id];if(it)toast('Verification re-run')}}
@@ -903,6 +956,7 @@ function act(kind){
   if(kind==='gap_weights'){const weights={};document.querySelectorAll('[data-w]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))weights[i.dataset.w]=v});emit({kind,weights,id:p&&p.id});return}
   if(kind==='plan_gap'&&p.kind==='corpus'){busy={sec:'plans',title:`Drafting a proposal for ${p.id}`,file:p.title,step:0,steps:STEPS.proposal};sec='plans';render();emit({kind,gap_id:p.id});return}
   if(kind==='plan_redraft'){busy={sec:'plans',title:`Drafting a new proposal for ${p.gap_id}`,file:p.gap_title,step:0,steps:STEPS.proposal};render();emit({kind,gap_id:p.gap_id});return}
+  if(kind==='report_build'){busy={sec:'reports',title:`Building the report for ${p.id}`,file:p.title,step:0,steps:STEPS.report};render();emit({kind,id:p.id});return}
   if(kind==='run_new'){runMode='new';render();return}
   if(kind==='run_list'){runMode=null;render();return}
   if(kind==='run_resume_gap'){const v=(document.querySelector('input[name=rgap]:checked')||{}).value;if(!v){toast('Choose a gap first.');return}
@@ -930,6 +984,7 @@ document.addEventListener('click',e=>{
   if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
   if(t.dataset.sec){go(t.dataset.sec);return}
   if(t.dataset.dl&&p&&p.verification){download(p.verification.md,`${p.id}-rev${p.verification.revision}-verification.md`);return}
+  if(t.dataset.rdl&&p&&p.report){downloadReport(p,t.dataset.rdl);return}
   if(t.dataset.decide){const p2=cur(),note=($('#decnote')?.value||'').trim();
     if(t.dataset.decide!=='approved'&&note.length<10){toast('Add a short note (10+ characters) saying why.');$('#decnote')?.focus();return}
     emit({kind:'plan_decide',id:p2.id,decision:t.dataset.decide,note});toast('Saving your decision…');return}

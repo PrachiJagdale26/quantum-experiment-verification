@@ -202,4 +202,4 @@ def state_fidelity(expected: Dict[str, List[float]], rho_or_psi: np.ndarray, n: 
         raise ValueError("expected state has zero norm")
     psi /= norm
     m = rho_or_psi if rho_or_psi.ndim == 2 else np.outer(rho_or_psi, rho_or_psi.conj())
-    return float(np.real(psi.conj() @ m @ psi))
+    return float(min(1.0, max(0.0, np.real(psi.conj() @ m @ psi))))     # clamp float round-off

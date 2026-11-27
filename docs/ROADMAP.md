@@ -1,6 +1,26 @@
 # Implementation roadmap: LLM-based research gap identification and experiment planning (quantum physics)
 
-Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans) and Phase 7 (orchestration) **done 2026-11-28**. Next: Phase 8 (reports and UI).
+Status: **approved 2026-11-27.** Phase 1 (foundations) and Phase 2 (literature collection) **done 2026-11-27**. Phase 3 (research analysis), Phase 4 (gap discovery and novelty) and Phase 5 (planning with edit and approval), Phase 6 (verification of approved plans), Phase 7 (orchestration) and Phase 8 (reports and UI) **done 2026-11-28**. Next: Phase 9 (evaluation).
+
+Phase 8 results:
+- **Report (`src/reporting/research_report.py`).** The 17 Module 8 sections are built from stored records for one plan: its gap, the gap's novelty investigation, the plan's revisions and approvals, verification runs, and the corpus context (collection, analysed papers, themes, coverage, untried pairs, recurring statements, all gaps and assessments).
+  - A section without data says so instead of being filled in.
+- **Provenance on every item:** verified quote, model-generated (with the model's name), computed, inference across papers, researcher, or metadata.
+  - A plan field the researcher edited is labelled "Researcher" (from the revision history); the model's draft keeps "Model-generated".
+  - A justification whose quote was not found is "Model-generated", never "Verified quote".
+- **References:** numbered by first citation, with authors, venue, year and DOI / arXiv / source links.
+- **Formats:** Markdown, JSON and PDF (reportlab; Arial when available so Unicode renders, with clickable links). Files go to `data/reports/` (git-ignored), and each build is recorded as a `ReportRecord`.
+- **UI:** a "Reports" step.
+  - **Overview:** stage counts (literature, gaps by novelty class, plans by status, verified, runs) and "Needs your attention" (waiting runs, draft plans, approved plans not verified on their current revision).
+  - **Per plan:** build or rebuild, download PDF / Markdown / JSON, a section index, and the report rendered with provenance styling. Model-generated text is italic with a dashed amber edge, researcher text teal, verified quotes green. A report built for an older revision says so.
+  - Novelty and verification already have their own views (Gaps, and the plan's Verification tab).
+  - Nav labels were shortened so the bar stays on one line.
+- **Live check (scratch copy):** the report for RP-2 has all 17 sections, 30 DOI-linked references, and 21 model-generated, 12 verified-quote, 6 researcher, 23 inference and 20 computed items. The PDF is 10 pages with 30 working links.
+  - Fixed along the way: state fidelity could print as 1.0000006 (floating-point round-off) and is now clamped to [0, 1].
+- **Known limitations:**
+  - One report per plan, not per guided run.
+  - The theme and coverage sections describe the whole corpus at build time, not a snapshot from when the plan was made.
+- **Tests:** 3 new offline tests (all 17 sections, every provenance kind, researcher vs model labelling, an unverified quote not labelled as a quote, DOI links, MD/JSON/PDF output and the record, and a report on a plan changed since verification). 164 pass; the 3 Vertex tests are deselected because billing is disabled.
 
 Phase 7 results:
 - **Research graph (`src/agents/research_graph.py`, LangGraph 1.2):** collect → analyse → find gaps → **[researcher chooses a gap]** → novelty → plan → **[researcher reviews the plan]** → verify → report.
