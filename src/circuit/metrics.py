@@ -22,6 +22,27 @@ def total_variation_distance(dist_a: Dict[str, float], dist_b: Dict[str, float])
     return float(tvd)
 
 
+def distribution_fidelity(dist_a: Dict[str, float], dist_b: Dict[str, float]) -> Optional[float]:
+    """
+    Classical fidelity between two probability distributions:
+    F(P, Q) = (sum_x sqrt(P(x) * Q(x)))^2, the squared Bhattacharyya coefficient.
+
+    Proposals state probabilities, not amplitudes, so this is the overlap
+    |<psi|phi>|^2 of the amplitude vectors sqrt(P) and sqrt(Q). It equals the
+    quantum state fidelity when the two states share phases. Each distribution
+    is normalised first. Bounded in [0.0, 1.0]; None if either is empty.
+    """
+    total_a = sum(max(v, 0.0) for v in dist_a.values())
+    total_b = sum(max(v, 0.0) for v in dist_b.values())
+    if total_a <= 0 or total_b <= 0:
+        return None
+    keys = set(dist_a) & set(dist_b)
+    coefficient = sum(
+        math.sqrt(max(dist_a[k], 0.0) / total_a * max(dist_b[k], 0.0) / total_b) for k in keys
+    )
+    return float(min(coefficient ** 2, 1.0))
+
+
 def compute_fidelity(sv_a: np.ndarray, sv_b: np.ndarray) -> float:
     """
     Compute phase-invariant quantum state fidelity between two pure statevectors:

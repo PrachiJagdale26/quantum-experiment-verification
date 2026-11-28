@@ -172,13 +172,13 @@ Open http://localhost:8502.
 
 Metrics that need human judgement (field accuracy, gap quality, the plan rubric, the future-work and partially-investigated sets) come with labelling sheets in `data/benchmark/labels/` and are reported as "not measured" until labelled. `python evaluate.py` runs the original 6-case proposal benchmark; `--gaps` runs the planted-gap benchmark on the 4 synthetic sample papers.
 
-Tests (offline):
+Tests, as GitHub Actions runs them on every push and pull request (`.github/workflows/tests.yml`, Python 3.11 and 3.12):
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q --deselect tests/test_gemini_integration.py --deselect tests/test_vertex_ai_integration.py
+.\.venv\Scripts\python.exe -m pytest -q -m "not live"
 ```
 
-154 offline tests pass; the two deselected files call live LLM APIs.
+Without API keys, 176 pass and 2 skip. Tests marked `live` need real Vertex AI or Gemini credentials and network access; run them with `-m live`.
 
 ## 16. Results
 
@@ -217,3 +217,9 @@ Field accuracy, gap quality and plan quality are **not measured** yet: they need
 ---
 
 Further documentation: [docs/ROADMAP.md](docs/ROADMAP.md) (audit, design and per-phase results), [docs/EVALUATION.md](docs/EVALUATION.md) (measured results), [docs/VERIFICATION_ENGINE.md](docs/VERIFICATION_ENGINE.md) (reference for the original proposal-verification engine).
+
+## Contributors
+
+- Dhyeykumar Patel
+- Prachi Jagdale
+- Balaji Mali

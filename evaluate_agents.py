@@ -10,7 +10,9 @@ Measures:
 - Evidence Relevance (avg citation similarity score)
 - Human-Review Frequency (cases requiring researcher approval)
 - Execution Latency (ms)
-- API Cost ($)
+
+Note: benchmark runs use demo mode (no live LLM calls), so no API token/cost
+figures are reported. Previous versions reported fixed placeholder costs.
 """
 
 import time
@@ -78,8 +80,6 @@ def run_benchmark_comparison() -> Tuple[pd.DataFrame, Dict[str, Any]]:
             "citations_retrieved": len(orig_cits),
             "avg_evidence_similarity": round(orig_avg_relevance, 3),
             "execution_time_ms": round(t_orig_ms, 2),
-            "api_tokens_approx": 850,
-            "api_cost_usd": 0.0008,
         })
 
         # ---------------------------------------------------------
@@ -125,8 +125,6 @@ def run_benchmark_comparison() -> Tuple[pd.DataFrame, Dict[str, Any]]:
             "citations_retrieved": len(agent_cits),
             "avg_evidence_similarity": round(agent_avg_relevance, 3),
             "execution_time_ms": round(t_agent_ms, 2),
-            "api_tokens_approx": 1250,
-            "api_cost_usd": 0.0012,
         })
 
     df = pd.DataFrame(records)
@@ -159,7 +157,6 @@ def run_benchmark_comparison() -> Tuple[pd.DataFrame, Dict[str, Any]]:
         review_freq = len(group[group["requires_human_review"]]) / total
         avg_time = group["execution_time_ms"].mean()
         avg_evidence = group["avg_evidence_similarity"].mean()
-        total_cost = group["api_cost_usd"].sum()
 
         summary[pipe_name] = {
             "Total Cases": total,
@@ -171,7 +168,6 @@ def run_benchmark_comparison() -> Tuple[pd.DataFrame, Dict[str, Any]]:
             "Human-Review Frequency": f"{review_freq * 100:.1f}%",
             "Avg Evidence Relevance": f"{avg_evidence:.3f}",
             "Avg Latency (ms)": f"{avg_time:.2f}",
-            "Total API Cost (USD)": f"${total_cost:.4f}",
         }
 
     return df, summary

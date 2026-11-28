@@ -90,6 +90,7 @@ class VerificationAgentState(TypedDict, total=False):
     overall_status: Optional[str]  # e.g., "PASS", "FAIL", "REQUIRES_REVIEW"
     discrepancy_detected: bool
     re_extraction_attempted: bool
+    re_extraction_outcome: Optional[str]  # CONFIRMED | POSSIBLE_EXTRACTION_ARTIFACT | UNDETERMINED
     fail_reasons: List[str]
 
     # 7. Agent Decisions, Logs & Traceability
@@ -145,6 +146,7 @@ def create_initial_state(
         overall_status=None,
         discrepancy_detected=False,
         re_extraction_attempted=False,
+        re_extraction_outcome=None,
         fail_reasons=[],
         agent_logs=[{
             "timestamp": datetime.now().isoformat(),

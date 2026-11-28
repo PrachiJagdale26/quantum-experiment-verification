@@ -4,7 +4,7 @@ Orchestrates the 5 specialized agents with typed shared state, conditional routi
 bounded retry loops, human-in-the-loop review, and computational fail precedence.
 """
 
-from typing import Dict, Any, Optional, Literal
+from typing import Dict, Any, List, Optional, Literal
 from datetime import datetime
 import logging
 
@@ -109,39 +109,101 @@ def human_review_node(state: VerificationAgentState) -> Dict[str, Any]:
     }
 
 
+def _gate_signature(gates) -> list:
+    """Normalised, order-preserving signature of a gate list for comparison."""
+    sig = []
+    for g in gates or []:
+        name = g.name.strip().upper()
+        name = "CX" if name == "CNOT" else name
+        sig.append((name, tuple(g.target_qubits)))
+    return sig
+
+
 def re_extraction_review_node(state: VerificationAgentState) -> Dict[str, Any]:
     """
     Re-Extraction Review Node (Workflow C).
-    Triggered when a computational discrepancy is detected and extraction was ambiguous.
-    Performs a single, bounded re-examination of proposal text to verify parameters.
+    Triggered when a computational discrepancy is detected and source text is available.
+    Re-reads the original document text with the deterministic strict extractors and
+    compares the result against the specification that was verified. This never changes
+    the verdict (computational FAIL precedence); it only records whether the discrepancy
+    could be an extraction artifact so a researcher can follow up.
     """
+    from ..llm.extractor import extract_strict_num_qubits, extract_strict_gates
+
     timestamp = datetime.now().isoformat()
     raw_text = state.get("document_raw_text") or ""
     proposal_spec = state.get("proposal_spec")
     fail_reasons = state.get("fail_reasons", [])
 
-    logger.info("ReExtractionReviewNode: re-checking document text for ambiguity.")
+    logger.info("ReExtractionReviewNode: re-checking document text for extraction ambiguity.")
+
+    findings: List[str] = []
+    mismatches: List[str] = []
+
+    reread_qubits = extract_strict_num_qubits(raw_text)
+    spec_qubits = proposal_spec.num_qubits if proposal_spec else None
+    if reread_qubits is None:
+        findings.append("Qubit count could not be independently re-established from source text.")
+    elif reread_qubits != spec_qubits:
+        mismatches.append(f"Qubit count: source text suggests {reread_qubits}, verified spec uses {spec_qubits}.")
+    else:
+        findings.append(f"Qubit count {spec_qubits} confirmed against source text.")
+
+    try:
+        reread_gates = extract_strict_gates(raw_text, reread_qubits or spec_qubits)
+    except Exception as exc:  # extractor must never break the audit
+        reread_gates = []
+        findings.append(f"Gate re-extraction failed: {exc}")
+    spec_gates = proposal_spec.circuit.gates if (proposal_spec and proposal_spec.circuit) else []
+    if not reread_gates:
+        findings.append("Gate sequence could not be independently re-established from source text.")
+    elif _gate_signature(reread_gates) != _gate_signature(spec_gates):
+        mismatches.append(
+            f"Gate sequence: source text suggests {_gate_signature(reread_gates)}, "
+            f"verified spec uses {_gate_signature(spec_gates)}."
+        )
+    else:
+        findings.append("Gate sequence confirmed against source text.")
+
+    if mismatches:
+        outcome = "POSSIBLE_EXTRACTION_ARTIFACT"
+        summary = (
+            "Source text disagrees with the verified specification; the discrepancy may be an "
+            "extraction artifact. Verdict retained (computational FAIL precedence); researcher review recommended."
+        )
+    elif any("confirmed" in f for f in findings):
+        outcome = "CONFIRMED"
+        summary = "Re-read parameters match the verified specification; discrepancy is not an extraction artifact."
+    else:
+        outcome = "UNDETERMINED"
+        summary = "Source text was too ambiguous to independently confirm the extracted parameters."
 
     log_entry = {
         "timestamp": timestamp,
         "agent_name": "ReExtractionReviewNode",
         "task": "Audit Discrepancy for Extraction Ambiguity",
-        "tool_invoked": None,
+        "tool_invoked": "extract_strict_num_qubits, extract_strict_gates",
         "input_summary": f"Discrepancies flagged: {fail_reasons}",
-        "output_summary": (
-            "Re-examined proposal text. Parameters confirmed against document source. "
-            "Computational discrepancy is genuine and not an extraction artifact."
-        ),
+        "output_summary": summary,
         "status": "COMPLETED",
-        "details": {"fail_reasons": fail_reasons},
+        "details": {
+            "fail_reasons": fail_reasons,
+            "outcome": outcome,
+            "findings": findings,
+            "mismatches": mismatches,
+        },
     }
 
-    return {
+    update: Dict[str, Any] = {
         "re_extraction_attempted": True,
+        "re_extraction_outcome": outcome,
         "current_agent": "ReExtractionReviewNode",
         "current_task": "Re-Extraction Review Completed",
         "agent_logs": [log_entry],
     }
+    if mismatches:
+        update["potential_inconsistencies"] = list(state.get("potential_inconsistencies", [])) + mismatches
+    return update
 
 
 # -------------------------------------------------------------
@@ -167,7 +229,10 @@ def route_after_literature(state: VerificationAgentState) -> str:
     retry_count = state.get("retrieval_retry_count", 0)
     max_retries = state.get("max_retrieval_retries", 2)
 
-    if query and (retry_count <= max_retries):
+    # The Literature Researcher only sets retrieval_query while retry_count < max_retries and
+    # increments the count when it does, so retry_count <= max_retries here. The bound is
+    # re-checked as a defensive guard against a malformed state.
+    if query and retry_count <= max_retries:
         logger.info(f"Orchestrator: Routing to literature retry ({retry_count}/{max_retries}).")
         return "literature_researcher"
     return "quantum_simulation"

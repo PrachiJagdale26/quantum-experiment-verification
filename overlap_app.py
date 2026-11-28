@@ -451,14 +451,22 @@ def research_page():
 
 BAR_CSS = """<style>
 .st-key-ovbar {border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent); padding: 2px 0 10px; margin-bottom: 6px;}
-.st-key-ovbar .ov-brand {margin: 0 14px 0 0;}
-.st-key-ovbar button {padding: 6px 12px; border-radius: 10px; min-height: 40px;}
+.st-key-ovbar .ov-brand {margin: 0 6px 0 0;}
+.st-key-ovbar button {padding: 6px 7px; border-radius: 10px; min-height: 40px;}
 .st-key-ovbar button p {font-size: 14px;}
 .st-key-ovbar button:hover {background: color-mix(in srgb, currentColor 8%, transparent);}
 .st-key-ovnav_dash button:disabled {opacity: 1 !important; cursor: default; color: inherit !important;
   background: color-mix(in srgb, currentColor 10%, transparent);}
 .st-key-ovnav_dash button:disabled p {color: inherit !important; font-weight: 500;}
-.st-key-ovbar .ov-arrow {opacity: .35; font-size: 13px; margin: 0 -4px;}
+.st-key-ovbar .ov-arrow {opacity: .35; font-size: 13px; margin: 0 -8px;}
+.ov-brand {display: flex; align-items: center; gap: 10px; margin: 4px 0 8px;}
+.ov-brand svg {width: 36px; height: 36px; flex: none;}
+.ov-brand .sph {fill: color-mix(in srgb, currentColor 10%, transparent); stroke: color-mix(in srgb, currentColor 25%, transparent);}
+.ov-brand .eq {fill: none; stroke: color-mix(in srgb, currentColor 45%, transparent); stroke-dasharray: 3 4;}
+.ov-brand .vec {stroke: currentColor; stroke-width: 3; stroke-linecap: round;}
+.ov-brand .tip {fill: currentColor;}
+.ov-brand b {display: block; font-size: 18px; font-weight: 500; line-height: 1.1;}
+.ov-brand span {font-size: 13px; opacity: .7;}
 </style>"""
 BRAND_HTML = ('<div class="ov-brand"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" class="sph"/>'
               '<ellipse cx="20" cy="20" rx="17" ry="5.5" class="eq"/><line x1="20" y1="20" x2="29" y2="8" class="vec"/>'
@@ -469,12 +477,13 @@ def dashboard_bar():
     """Overlap's top bar on the full dashboard: same steps, same session, one click back."""
     ss = st.session_state
     pipe = ss.get("pipeline")
-    counts = {"papers": len(pipe.library) if pipe else 0, "gaps": len(pipe.gaps) if pipe else 0,
-              "plans": len(pipe.plans) if pipe else 0}
+    library_gaps = [g for g in pipe.gaps if not g.gap_id.startswith("CG-")] if pipe else []
+    counts = {"literature": len(list_publications()), "papers": len(pipe.library) if pipe else 0,
+              "gaps": len(load_gaps()) + len(library_gaps), "plans": len(list_plans()) + (len(pipe.plans) if pipe else 0)}
     st.markdown(BAR_CSS, unsafe_allow_html=True)
     with st.container(horizontal=True, key="ovbar", vertical_alignment="center", gap="small"):
         st.markdown(BRAND_HTML, unsafe_allow_html=True)
-        steps = [("papers", "Papers"), ("gaps", "Gaps"), ("plans", "Plans")]
+        steps = [("literature", "Literature"), ("papers", "Papers"), ("gaps", "Gaps"), ("plans", "Plans")]
         for i, (sec, label) in enumerate(steps):
             n = counts[sec]
             if st.button(f"{label} ({n})" if n else label, key=f"ovnav_{sec}", type="tertiary"):
@@ -482,10 +491,11 @@ def dashboard_bar():
                 st.switch_page(research)
             if i < len(steps) - 1:
                 st.markdown('<span class="ov-arrow">→</span>', unsafe_allow_html=True)
-        if st.button("Check a proposal", key="ovnav_proposals", type="tertiary"):
-            ss.overlap_sec = "proposals"
-            st.switch_page(research)
-        st.button("Full dashboard", key="ovnav_dash", type="tertiary", disabled=True)
+        for sec, label in (("runs", "Guided run"), ("reports", "Reports"), ("proposals", "Check proposal")):
+            if st.button(label, key=f"ovnav_{sec}", type="tertiary"):
+                ss.overlap_sec = sec
+                st.switch_page(research)
+        st.button("Dashboard", key="ovnav_dash", type="tertiary", disabled=True)
 
 
 st.set_page_config(page_title="Overlap · Research gaps and experiment plans", page_icon="⚛️", layout="wide")

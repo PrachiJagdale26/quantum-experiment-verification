@@ -1,19 +1,19 @@
 case_id,case_name,ground_truth,expected_status,mode,actual_status,is_correct,checks_passed,checks_failed,checks_inconclusive,extraction_completeness,simulation_agreement,citations_retrieved,execution_time_ms
-CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,Rule & Simulation Only,INCONCLUSIVE,False,5,0,1,1.0,0.0,0,4.72
-CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,Rule & Simulation Only,FAIL,True,4,1,1,1.0,1.0,0,3.91
-CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,Rule & Simulation Only,FAIL,True,2,1,1,0.67,1.0,0,0.45
-CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,Rule & Simulation Only,INCONCLUSIVE,True,1,0,4,0.0,1.0,0,0.27
-CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,Rule & Simulation Only,INCONCLUSIVE,False,5,0,1,1.0,0.0,0,4.14
-CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,Rule & Simulation Only,FAIL,True,2,1,1,0.67,1.0,0,0.39
-CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,LLM Analysis (No RAG),INCONCLUSIVE,False,5,0,1,1.0,0.0,0,3.4
-CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,LLM Analysis (No RAG),FAIL,True,4,1,1,1.0,1.0,0,3.64
-CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,LLM Analysis (No RAG),FAIL,True,2,1,1,0.67,1.0,0,0.2
-CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,LLM Analysis (No RAG),INCONCLUSIVE,True,1,0,4,0.0,1.0,0,0.24
-CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,LLM Analysis (No RAG),INCONCLUSIVE,False,5,0,1,1.0,0.0,0,4.12
-CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,LLM Analysis (No RAG),FAIL,True,2,1,1,0.67,1.0,0,0.35
-CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,Hybrid (Rules + Sim + RAG),PASS,True,6,0,0,1.0,1.0,5,3.82
-CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,Hybrid (Rules + Sim + RAG),FAIL,True,5,1,0,1.0,1.0,5,5.77
-CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,Hybrid (Rules + Sim + RAG),FAIL,True,3,1,0,0.67,1.0,4,0.78
-CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,Hybrid (Rules + Sim + RAG),INCONCLUSIVE,True,2,0,3,0.0,1.0,4,0.82
-CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,Hybrid (Rules + Sim + RAG),PASS,True,6,0,0,1.0,1.0,6,6.09
-CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,Hybrid (Rules + Sim + RAG),FAIL,True,3,1,0,0.67,1.0,5,1.8
+CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,Rule & Simulation Only,INCONCLUSIVE,False,5,0,1,1.0,0.0,0,3.63
+CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,Rule & Simulation Only,FAIL,True,4,1,1,1.0,1.0,0,1.4
+CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,Rule & Simulation Only,FAIL,True,2,1,1,0.67,1.0,0,0.11
+CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,Rule & Simulation Only,INCONCLUSIVE,True,1,0,4,0.0,1.0,0,0.05
+CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,Rule & Simulation Only,INCONCLUSIVE,False,5,0,1,1.0,0.0,0,1.09
+CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,Rule & Simulation Only,FAIL,True,2,1,1,0.67,1.0,0,0.08
+CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,LLM Analysis (No RAG),INCONCLUSIVE,False,5,0,1,1.0,0.0,0,0.86
+CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,LLM Analysis (No RAG),FAIL,True,4,1,1,1.0,1.0,0,0.84
+CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,LLM Analysis (No RAG),FAIL,True,2,1,1,0.67,1.0,0,0.07
+CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,LLM Analysis (No RAG),INCONCLUSIVE,True,1,0,4,0.0,1.0,0,0.04
+CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,LLM Analysis (No RAG),INCONCLUSIVE,False,5,0,1,1.0,0.0,0,0.96
+CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,LLM Analysis (No RAG),FAIL,True,2,1,1,0.67,1.0,0,0.07
+CASE-01-BELL-VALID,Two-Qubit Bell State (|Phi+> Generation),VALID,PASS,Hybrid (Rules + Sim + RAG),PASS,True,6,0,0,1.0,1.0,8,917.79
+CASE-02-BELL-INVALID-DIST,Two-Qubit Bell State (Deliberately Incorrect Expected Distribution),INVALID,FAIL,Hybrid (Rules + Sim + RAG),FAIL,True,5,1,0,1.0,1.0,6,978.06
+CASE-03-INVALID-QUBIT-GATE,Invalid Qubit Index (Qubit Out-of-Bounds),INVALID,FAIL,Hybrid (Rules + Sim + RAG),FAIL,True,3,1,0,0.67,1.0,4,682.95
+CASE-04-INCOMPLETE-PROPOSAL,Incomplete Quantum Algorithm Proposal,INCOMPLETE,INCONCLUSIVE,Hybrid (Rules + Sim + RAG),INCONCLUSIVE,True,2,0,3,0.0,1.0,3,485.02
+CASE-05-GHZ-STATE,Three-Qubit Greenberger-Horne-Zeilinger (GHZ) State Preparation,VALID,PASS,Hybrid (Rules + Sim + RAG),PASS,True,6,0,0,1.0,1.0,5,901.32
+CASE-06-MALFORMED-PARAM,Single-Qubit Rotation with Missing Angle Parameter,INVALID,FAIL,Hybrid (Rules + Sim + RAG),FAIL,True,3,1,0,0.67,1.0,4,641.31

@@ -50,27 +50,31 @@ def literature_researcher_agent(state: VerificationAgentState) -> Dict[str, Any]
         top_k_per_query=2,
     )
 
-    citations = tool_res.get("citations", [])
+    new_citations = tool_res.get("citations", [])
     evaluations = tool_res.get("evaluations", [])
+
+    # Accumulate evidence across attempts (dedupe by citation id, keep best score)
+    merged: Dict[str, Any] = {}
+    for c in list(state.get("literature_citations", []) or []) + list(new_citations):
+        prev = merged.get(c.citation_id)
+        if prev is None or c.similarity_score > prev.similarity_score:
+            merged[c.citation_id] = c
+    citations = sorted(merged.values(), key=lambda c: c.similarity_score, reverse=True)
+    if not evaluations:
+        evaluations = state.get("literature_evaluations", []) or []
 
     # Evaluate sufficiency of retrieved evidence
     avg_relevance = (
         sum(c.similarity_score for c in citations) / len(citations)
         if citations else 0.0
     )
-    
+
+    # This agent is the single owner of the retry limit; the router only follows retrieval_query.
     needs_refinement = (len(citations) == 0 or avg_relevance < 0.20) and (retry_count < max_retries)
     next_query = None
 
     if needs_refinement:
-        # Formulate refined query based on circuit operations and core physics
-        gates_str = ""
-        if proposal_spec.circuit and proposal_spec.circuit.gates:
-            gates_str = " ".join(set(g.name for g in proposal_spec.circuit.gates))
-        next_query = (
-            f"Quantum state fidelity and measurement for {proposal_spec.title} {gates_str} "
-            f"entanglement state preparation"
-        )
+        next_query = build_refined_query(proposal_spec, attempt=retry_count + 1)
         logger.info(
             f"Literature Researcher: evidence weak (avg={avg_relevance:.2f}). "
             f"Refining query (retry {retry_count + 1}/{max_retries}): '{next_query}'"
@@ -106,3 +110,32 @@ def literature_researcher_agent(state: VerificationAgentState) -> Dict[str, Any]
         "current_task": "Literature Retrieval Completed" if not needs_refinement else "Refining Retrieval Query",
         "agent_logs": [log_entry],
     }
+
+
+def build_refined_query(proposal_spec, attempt: int) -> str:
+    """
+    Builds a different refined query for each retry attempt so that retries
+    explore new evidence instead of repeating an identical search.
+      attempt 1: circuit operations (gate vocabulary) + state preparation
+      attempt 2: expected measurement outcomes + stated objective/hypothesis
+      attempt 3+: quantum system / methodology keywords
+    """
+    gates = []
+    if proposal_spec.circuit and proposal_spec.circuit.gates:
+        # sorted for deterministic queries (set ordering is not stable across runs)
+        gates = sorted({g.name.upper() for g in proposal_spec.circuit.gates})
+
+    if attempt == 1:
+        gate_terms = " ".join(gates) if gates else "quantum gates"
+        return f"{gate_terms} gate circuit entanglement state preparation {proposal_spec.title}"
+
+    if attempt == 2:
+        outcomes = " ".join(
+            f"|{o.basis_state}>" for o in (proposal_spec.expected_outcomes or [])
+        )
+        focus = proposal_spec.hypothesis or proposal_spec.objective or proposal_spec.title
+        return f"measurement probability distribution {outcomes} {focus}".strip()
+
+    system = getattr(proposal_spec, "quantum_system", None) or ""
+    method = getattr(proposal_spec, "methodology", None) or ""
+    return f"{system} {method} {proposal_spec.num_qubits or ''}-qubit experiment fidelity".strip()
