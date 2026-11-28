@@ -181,6 +181,10 @@ with st.sidebar:
     st.subheader("Engine")
     st.caption(f"Simulator: {'Qiskit statevector' if HAS_QISKIT else 'NumPy statevector (Qiskit not installed)'}")
     st.caption(f"Literature library: {kb.count()} indexed passages")
+    if kb.is_semantic:
+        st.caption(f"Retrieval: {kb.describe()}")
+    else:
+        st.warning(f"Retrieval is degraded: {kb.describe()}")
     st.caption("Accepts PDF and Word (.docx) proposals")
 
     st.divider()

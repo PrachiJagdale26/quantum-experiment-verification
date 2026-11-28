@@ -1,0 +1,133 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/+PweZOzXIrQlWLnnd1EaAMHCfVE</id>
+  <title>arXiv Query: search_query=all:quantum AND all:error AND all:mitigation&amp;id_list=&amp;start=0&amp;max_results=5</title>
+  <updated>2026-11-27T15:51:31Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:quantum+AND+(all:error+AND+all:mitigation)&amp;start=0&amp;max_results=5&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>5</opensearch:itemsPerPage>
+  <opensearch:totalResults>1900</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2611.29983v1</id>
+    <title>Cqlib: A High-Performance Software Stack for Quantum Computing</title>
+    <updated>2026-11-23T03:48:06Z</updated>
+    <link href="https://arxiv.org/abs/2611.29983v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2611.29983v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents Cqlib, a high-performance software stack for quantum computing built around a unified quantum circuit model. Its native Rust core provides efficient implementations of circuit processing, quantum-state and operator computation, compilation, and optimization, while Python and C interfaces support algorithm development and system integration. Cqlib covers quantum program construction, simulation, analysis, compilation, device adaptation, and result processing under consistent program semantics. Through OpenQASM and the Quantum Control Instruction Set (QCIS), Cqlib supports program representation and hardware-oriented execution. Cqlib further provides backend interfaces for device execution, with Cqlib-Tianyan serving as one implementation for QCIS-compatible quantum hardware. Evaluations using parameterized compilation tasks from Benchpress and related tests show that Cqlib achieves good functional coverage, compilation correctness, and execution efficiency within the evaluated task scope. We develop Cqlib-Algorithm as a modular library of reusable operators and composable components for widely used quantum algorithms, including quantum search, phase estimation, and variational algorithms, with additional support for error mitigation. To complement these building blocks with domain-specific workflows, we further develop Cqlib-VQE, Cqlib-QAOA, and Cqlib-QML for application-level studies in quantum chemistry, combinatorial optimization, and quantum machine learning, respectively. Cqlib also integrates source-grounded Skills and MCP-based tools to support agent-assisted program generation, backend execution, and result-guided workflow refinement. Overall, Cqlib provides a unified and extensible software foundation that connects quantum algorithm development, simulation, compilation, and execution on QCIS-compatible quantum hardware.</summary>
+    <category term="quant-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-11-23T03:48:06Z</published>
+    <arxiv:comment>32 pages, 6 figures. A general-purpose and extensible software framework for quantum computing</arxiv:comment>
+    <arxiv:primary_category term="quant-ph"/>
+    <author>
+      <name> Tianyan Quantum Group</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2303.00445v2</id>
+    <title>Benchmarking Noisy Intermediate Scale Quantum Error Mitigation Strategies for Ground State Preparation of the HCl Molecule</title>
+    <updated>2023-03-02T14:57:36Z</updated>
+    <link href="https://arxiv.org/abs/2303.00445v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2303.00445v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Due to numerous limitations including restrictive qubit topologies, short coherence times and prohibitively high noise floors, few quantum chemistry experiments performed on existing noisy intermediate-scale quantum hardware have achieved the high bar of chemical precision, namely energy errors to within 1.6 mHa of full configuration interaction. To have any hope of doing so, we must layer contemporary resource reduction techniques with best-in-class error mitigation methods; in particular, we combine the techniques of qubit tapering and the contextual subspace variational quantum eigensolver with several error mitigation strategies comprised of measurement-error mitigation, symmetry verification, zero-noise extrapolation and dual-state purification. We benchmark these strategies across a suite of eight 27-qubit IBM Falcon series quantum processors, taking preparation of the HCl molecule's ground state as our testbed.</summary>
+    <category term="quant-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-03-01T12:08:50Z</published>
+    <arxiv:comment>18 pages, 15 figures, 4 tables, supplementary GitHub repository: https://github.com/TimWeaving/quantum-error-mitigation</arxiv:comment>
+    <arxiv:primary_category term="quant-ph"/>
+    <author>
+      <name>Tim Weaving</name>
+    </author>
+    <author>
+      <name>Alexis Ralli</name>
+    </author>
+    <author>
+      <name>William M. Kirby</name>
+    </author>
+    <author>
+      <name>Peter J. Love</name>
+    </author>
+    <author>
+      <name>Sauro Succi</name>
+    </author>
+    <author>
+      <name>Peter V. Coveney</name>
+    </author>
+    <arxiv:doi>10.1103/PhysRevResearch.5.043054</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1103/PhysRevResearch.5.043054" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2311.00487v2</id>
+    <title>Echo-evolution data generation for quantum error mitigation via neural networks</title>
+    <updated>2025-01-20T11:47:14Z</updated>
+    <link href="https://arxiv.org/abs/2311.00487v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2311.00487v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Neural networks provide a prospective tool for error mitigation in quantum simulation of physical systems. However, we need both noisy and noise-free data to train neural networks to mitigate errors in quantum computing results. Here, we propose a physics-motivated method to generate training data for quantum error mitigation via neural networks, which does not require classical simulation and target circuit simplification. In particular, we propose to use the echo evolution of a quantum system to collect noisy and noise-free data for training a neural network. Under this method, the initial state evolves forward and backward in time, returning to the initial state at the end of evolution. When run on a noisy quantum processor, the resulting state will be affected by the quantum noise accumulated during evolution. Having a vector of observable values of the initial (noise-free) state and the resulting (noisy) state allows us to compose training data for a neural network. We demonstrate that a feed-forward fully connected neural network trained on echo-evolution-generated data can correct results of forward-in-time evolution. Our findings can enhance the application of neural networks to error mitigation in quantum computing.</summary>
+    <category term="quant-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-11-01T12:40:10Z</published>
+    <arxiv:comment>published in Quantum Information Processing</arxiv:comment>
+    <arxiv:primary_category term="quant-ph"/>
+    <arxiv:journal_ref>Quantum Inf Process 23, 405 (2024)</arxiv:journal_ref>
+    <author>
+      <name>D. V. Babukhin</name>
+    </author>
+    <arxiv:doi>10.1007/s11128-024-04603-7</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1007/s11128-024-04603-7" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2201.00752v5</id>
+    <title>Quantum error mitigation via matrix product operators</title>
+    <updated>2022-10-13T11:25:24Z</updated>
+    <link href="https://arxiv.org/abs/2201.00752v5" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2201.00752v5" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In the era of noisy intermediate-scale quantum (NISQ) devices, the number of controllable hardware qubits is insufficient to implement quantum error correction (QEC). As an alternative, quantum error mitigation (QEM) can suppress errors in measurement results via repeated experiments and postprocessing of data. Typical techniques for error mitigation, e.g., the quasi-probability decomposition method, ignore correlated errors between different gates. Here, we introduce a QEM method based on the matrix product operator (MPO) representation of a quantum circuit that can characterize the noise channel with polynomial complexity. Our technique is demonstrated on a $\rm{depth}=20$ fully parallel quantum circuit of up to $N_q=20$ qubits undergoing local and global noise. The circuit error is reduced by several times with only a small bond dimension $D^{\prime} = 1$ for the noise channel. The MPO representation increases the accuracy of modeling noise without consuming more experimental resources, which improves the QEM performance and broadens its scope of application. Our method is hopeful of being applied to circuits in higher dimensions with more qubits and deeper depth.</summary>
+    <category term="quant-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cond-mat.mes-hall" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-01-03T16:57:43Z</published>
+    <arxiv:comment>13 pages, 13 figures, to appear in PRX Quantum</arxiv:comment>
+    <arxiv:primary_category term="quant-ph"/>
+    <arxiv:journal_ref>PRX Quantum 3, 040313 (2022)</arxiv:journal_ref>
+    <author>
+      <name>Yuchen Guo</name>
+    </author>
+    <author>
+      <name>Shuo Yang</name>
+    </author>
+    <arxiv:doi>10.1103/PRXQuantum.3.040313</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1103/PRXQuantum.3.040313" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2107.13470v2</id>
+    <title>Unifying and benchmarking state-of-the-art quantum error mitigation techniques</title>
+    <updated>2023-05-22T22:07:08Z</updated>
+    <link href="https://arxiv.org/abs/2107.13470v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2107.13470v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Error mitigation is an essential component of achieving a practical quantum advantage in the near term, and a number of different approaches have been proposed. In this work, we recognize that many state-of-the-art error mitigation methods share a common feature: they are data-driven, employing classical data obtained from runs of different quantum circuits. For example, Zero-noise extrapolation (ZNE) uses variable noise data and Clifford-data regression (CDR) uses data from near-Clifford circuits. We show that Virtual Distillation (VD) can be viewed in a similar manner by considering classical data produced from different numbers of state preparations. Observing this fact allows us to unify these three methods under a general data-driven error mitigation framework that we call UNIfied Technique for Error mitigation with Data (UNITED). In certain situations, we find that our UNITED method can outperform the individual methods (i.e., the whole is better than the individual parts). Specifically, we employ a realistic noise model obtained from a trapped ion quantum computer to benchmark UNITED, as well as other state-of-the-art methods, in mitigating observables produced from random quantum circuits and the Quantum Alternating Operator Ansatz (QAOA) applied to Max-Cut problems with various numbers of qubits, circuit depths and total numbers of shots. We find that the performance of different techniques depends strongly on shot budgets, with more powerful methods requiring more shots for optimal performance. For our largest considered shot budget ($10^{10}$), we find that UNITED gives the most accurate mitigation. Hence, our work represents a benchmarking of current error mitigation methods and provides a guide for the regimes when certain methods are most useful.</summary>
+    <category term="quant-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-07-28T16:29:08Z</published>
+    <arxiv:comment>25 pages, 11 figures, extended theoretical and numerical results, accepted by Quantum</arxiv:comment>
+    <arxiv:primary_category term="quant-ph"/>
+    <arxiv:journal_ref>Quantum 7, 1034 (2023)</arxiv:journal_ref>
+    <author>
+      <name>Daniel Bultrini</name>
+    </author>
+    <author>
+      <name>Max Hunter Gordon</name>
+    </author>
+    <author>
+      <name>Piotr Czarnik</name>
+    </author>
+    <author>
+      <name>Andrew Arrasmith</name>
+    </author>
+    <author>
+      <name>M. Cerezo</name>
+    </author>
+    <author>
+      <name>Patrick J. Coles</name>
+    </author>
+    <author>
+      <name>Lukasz Cincio</name>
+    </author>
+    <arxiv:doi>10.22331/q-2023-06-06-1034</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.22331/q-2023-06-06-1034" title="doi"/>
+  </entry>
+</feed>

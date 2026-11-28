@@ -1,0 +1,508 @@
+{
+  "date": "2026-11-27T21:17:07+00:00",
+  "database": "phase4_live.db",
+  "software": {
+    "python": "3.12.5",
+    "qiskit": "2.6.1",
+    "qiskit-aer": "0.18.4",
+    "langgraph": "1.2.24",
+    "sentence-transformers": "6.3.0",
+    "chromadb": "1.5.9",
+    "rapidfuzz": "3.14.6",
+    "embedding_model": "all-MiniLM-L6-v2"
+  },
+  "extractors": {
+    "gemini/gemini-flash-lite-latest": 116,
+    "rule-based": 13
+  },
+  "extraction": {
+    "corpus": {
+      "papers": 22,
+      "from_full_text": 1,
+      "statements": 129,
+      "by_kind": {
+        "interpretation": 71,
+        "unverified": 5,
+        "direct": 53
+      },
+      "model_statements": 116,
+      "model_evidence_verified_share": 0.957,
+      "papers_with_field": {
+        "research_problem": 21,
+        "objective": 14,
+        "quantum_system": 14,
+        "methodology": 12,
+        "result": 11,
+        "conclusion": 7,
+        "noise_model": 4,
+        "technique": 4,
+        "limitation": 3,
+        "experimental_parameter": 3,
+        "future_work": 2,
+        "assumption": 2,
+        "evaluation_metric": 2,
+        "dataset_or_environment": 2,
+        "existing_approach": 1,
+        "research_question": 1,
+        "unresolved_problem": 1
+      }
+    },
+    "verifier_stress_test": {
+      "quotes": 124,
+      "papers": 21,
+      "false_rejection_rate": 0.0,
+      "detection_rate": 0.996,
+      "by_variant": {
+        "fabricated: negation inserted": {
+          "accepted": 0,
+          "total": 54,
+          "accepted_share": 0.0
+        },
+        "fabricated: number changed": {
+          "accepted": 0,
+          "total": 32,
+          "accepted_share": 0.0
+        },
+        "fabricated: quote from another paper": {
+          "accepted": 0,
+          "total": 124,
+          "accepted_share": 0.0
+        },
+        "fabricated: term swapped": {
+          "accepted": 1,
+          "total": 59,
+          "accepted_share": 0.017
+        },
+        "genuine: accents stripped": {
+          "accepted": 124,
+          "total": 124,
+          "accepted_share": 1.0
+        },
+        "genuine: as quoted": {
+          "accepted": 124,
+          "total": 124,
+          "accepted_share": 1.0
+        },
+        "genuine: lower-cased": {
+          "accepted": 124,
+          "total": 124,
+          "accepted_share": 1.0
+        },
+        "genuine: whitespace collapsed": {
+          "accepted": 124,
+          "total": 124,
+          "accepted_share": 1.0
+        }
+      },
+      "accepted_fabrications_examples": [
+        {
+          "variant": "term swapped",
+          "text": "quantum key distribution needs to ensure timely provision of entangled qubits to be used in tasks that involve distributed quantum computing or sensing."
+        }
+      ]
+    }
+  },
+  "gaps": {
+    "procedure": "Gap evaluation.\n\nAutomatic (describes the candidate set; says nothing about scientific value):\n  - evidence grounding: share of gaps whose supporting evidence is verified quotes, vs. corpus inferences\n  - specificity: share of gaps naming at least two core research dimensions of their own (not borrowed context)\n  - near-duplicates: pairs of gaps whose statements have embedding cosine similarity >= 0.85\n  - novelty outcomes for the gaps that were checked\nGap quality (relevance, evidence support, duplicates as judged by an expert) needs the review sheet; not measured\nuntil rows are labelled.",
+    "gaps": 17,
+    "by_origin": {
+      "stated_limitation": 10,
+      "unresolved_problem": 1,
+      "future_work": 2,
+      "unexplored_combination": 4
+    },
+    "evidence_quoted_share": 0.765,
+    "specific_share": 0.294,
+    "near_duplicate_pairs": [
+      {
+        "a": "CG-15",
+        "b": "CG-17",
+        "similarity": 0.867
+      }
+    ],
+    "novelty_outcomes": {
+      "partially_investigated": 4,
+      "not checked": 8,
+      "already_investigated": 5
+    },
+    "researcher_review": {
+      "candidate": 16,
+      "validated": 1
+    }
+  },
+  "verification": {
+    "procedure": "Quantum verification evaluation: false-pass and false-fail rates on cases with known answers.\n\nTwo sets:\n  1. the 6 existing proposal benchmark cases (data/benchmark_cases, expected status written by hand);\n  2. plan-verification cases whose ground truth comes from textbook theory, written here and never taken from the\n     simulator: Bell and GHZ states, a GHZ prediction with the wrong populations, a GHZ-minus target (same\n     probabilities, different phase), RY rotations (P(1) = sin^2(theta/2)), a wrong rotation prediction, impossible\n     noise (T2 > 2 T1), noisy predictions that should and should not survive the stated noise, and a plan without a\n     circuit (must be held, not passed or failed).\nFalse pass = a case that should fail or be held was passed. False fail = a case that should pass was failed.",
+    "proposal_benchmark": {
+      "cases": 6,
+      "correct": 6,
+      "false_pass": 0,
+      "of_should_not_pass": 4,
+      "false_fail": 0,
+      "of_should_pass": 2,
+      "cases_detail": [
+        {
+          "id": "CASE-01-BELL-VALID",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "CASE-02-BELL-INVALID-DIST",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "CASE-03-INVALID-QUBIT-GATE",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "CASE-04-INCOMPLETE-PROPOSAL",
+          "expected": "hold",
+          "got": "hold"
+        },
+        {
+          "id": "CASE-05-GHZ-STATE",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "CASE-06-MALFORMED-PARAM",
+          "expected": "fail",
+          "got": "fail"
+        }
+      ]
+    },
+    "plan_cases": {
+      "cases": 12,
+      "correct": 12,
+      "false_pass": 0,
+      "of_should_not_pass": 7,
+      "false_fail": 0,
+      "of_should_pass": 5,
+      "cases_detail": [
+        {
+          "id": "bell",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "ghz",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "ghz wrong populations",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "ghz-minus target (phase)",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "ry(pi/3)",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "ry(pi/3) wrong prediction",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "x then h",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "impossible noise T2 > 2T1",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "noisy prediction survives weak noise",
+          "expected": "pass",
+          "got": "pass"
+        },
+        {
+          "id": "noisy prediction fails 10% readout",
+          "expected": "fail",
+          "got": "fail"
+        },
+        {
+          "id": "no circuit",
+          "expected": "hold",
+          "got": "hold"
+        },
+        {
+          "id": "circuit without predictions",
+          "expected": "hold",
+          "got": "hold"
+        }
+      ]
+    }
+  },
+  "retrieval": {
+    "procedure": "Literature retrieval evaluation, measured on the known-work set.\n\nGround truth: each benchmark gap was written from a published paper's own question, so that paper is the one\nrelevant document we know of. The novelty benchmark stored every query it sent (SearchRun, kind and source) and\nevery hit with its rank (SearchHit), so retrieval is measured from those records; nothing is re-queried.\n\nMetrics, per source and per query kind: Recall@k (the source paper is among the first k results), MRR (mean\nreciprocal rank of the source paper, 0 when absent). \"Any\" pools all queries of a gap. k is bounded by the number\nof results requested per query (10 in the benchmark), so Recall@10 is the maximum measurable.\nLimitation: one known relevant paper per query; other relevant papers in the results are not judged, so\nprecision is not measured (it needs the topic set with relevance judgements).",
+    "gaps": 15,
+    "failed_or_rate_limited_searches": 0,
+    "any_query_any_source": {
+      "n": 15,
+      "mrr": 0.787,
+      "recall@1": 0.733,
+      "recall@3": 0.8,
+      "recall@10": 0.933
+    },
+    "by_source": {
+      "arxiv": {
+        "n": 15,
+        "mrr": 0.0,
+        "recall@1": 0.0,
+        "recall@3": 0.0,
+        "recall@10": 0.0
+      },
+      "crossref": {
+        "n": 15,
+        "mrr": 0.075,
+        "recall@1": 0.067,
+        "recall@3": 0.067,
+        "recall@10": 0.133
+      },
+      "openalex": {
+        "n": 15,
+        "mrr": 0.787,
+        "recall@1": 0.733,
+        "recall@3": 0.8,
+        "recall@10": 0.933
+      }
+    },
+    "by_query_kind": {
+      "concepts": {
+        "n": 15,
+        "mrr": 0.008,
+        "recall@1": 0.0,
+        "recall@3": 0.0,
+        "recall@10": 0.067
+      },
+      "exact": {
+        "n": 15,
+        "mrr": 0.753,
+        "recall@1": 0.667,
+        "recall@3": 0.8,
+        "recall@10": 0.933
+      },
+      "method": {
+        "n": 2,
+        "mrr": 0.0,
+        "recall@1": 0.0,
+        "recall@3": 0.0,
+        "recall@10": 0.0
+      },
+      "statement_context": {
+        "n": 3,
+        "mrr": 1.0,
+        "recall@1": 1.0,
+        "recall@3": 1.0,
+        "recall@10": 1.0
+      },
+      "synonym": {
+        "n": 15,
+        "mrr": 0.0,
+        "recall@1": 0.0,
+        "recall@3": 0.0,
+        "recall@10": 0.0
+      }
+    }
+  },
+  "novelty": {
+    "source": "novelty_known_work_20261127_1949.json",
+    "date": "2026-11-27T19:49:36.426824+00:00",
+    "metrics": {
+      "items": 15,
+      "false_novelty_rate": 0.0,
+      "false_novelty_ci95": [
+        0.0,
+        0.204
+      ],
+      "detection_rate": 1.0,
+      "insufficient_coverage_rate": 0.0,
+      "by_classification": {
+        "already_investigated": 15,
+        "partially_investigated": 0,
+        "conflicting_findings": 0,
+        "potentially_unexplored": 0,
+        "insufficient_coverage": 0
+      },
+      "recall_screened": 0.933,
+      "recall_compared_top_k": 0.867,
+      "mrr_compared": 0.776,
+      "decided_by_source_paper": 11,
+      "distinct_core_dimension_sets": 4,
+      "controls_not_already": 5,
+      "controls_implausible": 5,
+      "positive_control_detected": true
+    },
+    "controls": [
+      {
+        "gap": "Study barren plateaus on nv centers under leakage.",
+        "positive_control": false,
+        "classification": "potentially_unexplored",
+        "confidence": 0.56,
+        "closest": {
+          "title": "barren plateau",
+          "same": 1,
+          "similarity": 0.578
+        }
+      },
+      {
+        "gap": "Study measurement-induced phase transitions on photonic qubits under crosstalk.",
+        "positive_control": false,
+        "classification": "partially_investigated",
+        "confidence": 0.59,
+        "closest": {
+          "title": "Multizone Trapped-Ion Qubit Control in an Integrated Photonics QCCD Device",
+          "same": 2,
+          "similarity": 0.508
+        }
+      },
+      {
+        "gap": "Study barren plateaus on topological qubits under non-markovian noise.",
+        "positive_control": false,
+        "classification": "potentially_unexplored",
+        "confidence": 0.56,
+        "closest": {
+          "title": "Illustration of Barren Plateaus in Quantum Computing",
+          "same": 1,
+          "similarity": 0.728
+        }
+      },
+      {
+        "gap": "Study quantum machine learning on nv centers under leakage.",
+        "positive_control": false,
+        "classification": "partially_investigated",
+        "confidence": 0.62,
+        "closest": {
+          "title": "From membership-privacy leakage to quantum machine unlearning",
+          "same": 2,
+          "similarity": 0.609
+        }
+      },
+      {
+        "gap": "Study tomography on topological qubits under non-markovian noise.",
+        "positive_control": false,
+        "classification": "partially_investigated",
+        "confidence": 0.67,
+        "closest": {
+          "title": "Dynamical quantum maps for single-qubit gates under universal non-Markovian noise",
+          "same": 2,
+          "similarity": 0.594
+        }
+      },
+      {
+        "gap": "Study quantum error correction on trapped ions under depolarizing noise.",
+        "positive_control": true,
+        "classification": "already_investigated",
+        "confidence": 0.79,
+        "closest": {
+          "title": "Logical quantum circuits protected by the Steane code for specific noises in trapped ions",
+          "same": 3,
+          "similarity": 0.72
+        }
+      }
+    ],
+    "configuration": {
+      "sources": [
+        "openalex",
+        "arxiv",
+        "crossref"
+      ],
+      "per_query": 10,
+      "top_k": 8,
+      "max_queries": 5,
+      "citations": true,
+      "llm_judge": null,
+      "embedding_model": "all-MiniLM-L6-v2",
+      "policy": {
+        "min_sources_ok": 2,
+        "min_queries": 3,
+        "min_screened": 15,
+        "already_similarity": 0.55,
+        "partial_similarity": 0.45
+      }
+    },
+    "limitations": [
+      "The gap text is the paper's own sentence, so the exact-keyword query shares wording with the target; this makes retrieval easier than for a gap phrased independently. Recall is therefore an upper bound.",
+      "Dimensions missing from the sentence are filled from the source paper's own tags (as for real gaps).",
+      "The source paper stays in the external indexes; only the local corpus excludes it.",
+      "Comparisons use titles and abstracts; papers without abstracts are compared on titles.",
+      "Thresholds in CoveragePolicy were set before this run; tuning them on this set would overfit.",
+      "A small set: rates have wide uncertainty (Wilson 95% interval reported).",
+      "If most questions share the corpus topic (see distinct_core_dimension_sets), the set cannot separate a good checker from one that always answers 'already investigated'; the specificity control is reported for that reason.",
+      "Ontology surface forms are matched without word sense: 'leakage' also matches privacy leakage, and 'integrated photonics' marks a trapped-ion device as photonic."
+    ]
+  },
+  "labelling_sheets": {
+    "extraction_annotation.csv": "kept (may contain labels)",
+    "gap_review.csv": "kept (may contain labels)",
+    "plan_rubric.csv": "kept (may contain labels)",
+    "future_work.csv": "kept (may contain labels)",
+    "partially_investigated.csv": "kept (may contain labels)"
+  },
+  "human_labelled": {
+    "extraction_field_accuracy": {
+      "labelled": 0,
+      "value": null,
+      "rows": 94
+    },
+    "extraction_attribution_accuracy": {
+      "labelled": 0,
+      "value": null,
+      "rows": 94
+    },
+    "gap_relevance_mean": {
+      "labelled": 0,
+      "value": null,
+      "rows": 17
+    },
+    "gap_evidence_support_mean": {
+      "labelled": 0,
+      "value": null,
+      "rows": 17
+    },
+    "plan_rubric_means": {
+      "consistency": {
+        "labelled": 0,
+        "value": null,
+        "rows": 5
+      },
+      "completeness": {
+        "labelled": 0,
+        "value": null,
+        "rows": 5
+      },
+      "feasibility": {
+        "labelled": 0,
+        "value": null,
+        "rows": 5
+      },
+      "alignment": {
+        "labelled": 0,
+        "value": null,
+        "rows": 5
+      }
+    },
+    "future_work_addressed_share": {
+      "labelled": 0,
+      "value": null,
+      "rows": 1
+    },
+    "partially_investigated_labelled": {
+      "labelled": 0,
+      "rows": 3,
+      "value": null,
+      "note": "Accuracy needs a live novelty run on the labelled rows."
+    }
+  },
+  "duration_s": 1.2
+}

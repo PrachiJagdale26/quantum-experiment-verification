@@ -56,6 +56,9 @@ class ConfigurableLLMClient:
         self.demo_mode = demo_mode
         self.last_test_result: Optional[Dict[str, Any]] = None
         self.last_test_timestamp: Optional[str] = None
+        self.last_model_used: Optional[str] = None
+        self.last_call: Dict[str, Any] = {}
+        self._served_by_demo = False
         self._gemini_client: Optional[Any] = None
         self._vertex_client: Optional[Any] = None
         self._vertex_project: Optional[str] = None
@@ -444,11 +447,20 @@ class ConfigurableLLMClient:
             # If primary model has 503 high demand spike, probe active fallback to confirm key & network
             elif any(term in err_str for term in ("503", "UNAVAILABLE", "high demand", "504", "DEADLINE_EXCEEDED")):
                 try:
-                    fb_resp = client.models.generate_content(
-                        model="gemini-3.6-flash",
-                        contents=probe_prompt
-                    )
-                    actual_model_used = f"{self._model} (Catalog Verified; 503 Spike -> Active Fallback Gemini 3.6 Flash Responded)"
+                    # Probe the same configured fallbacks the app uses for real calls.
+                    fallbacks = [m.strip() for m in os.getenv(
+                        "GEMINI_FALLBACK_MODELS", "gemini-flash-latest,gemini-flash-lite-latest,gemini-3.1-flash-lite"
+                    ).split(",") if m.strip() and m.strip() != self._model]
+                    fb_resp, fb_last_err = None, None
+                    for fb_model in fallbacks:
+                        try:
+                            fb_resp = client.models.generate_content(model=fb_model, contents=probe_prompt)
+                            actual_model_used = f"{self._model} (busy, 503) -> fallback {fb_model} responded"
+                            break
+                        except Exception as one_err:
+                            fb_last_err = one_err
+                    if fb_resp is None:
+                        raise fb_last_err or RuntimeError("No fallback model configured")
                     response_text = fb_resp.text.strip() if fb_resp and fb_resp.text else "OK"
                 except Exception as fb_err:
                     fb_str = str(fb_err)
@@ -519,18 +531,78 @@ class ConfigurableLLMClient:
     def model_name(self) -> str:
         return self._model
 
-    def complete(self, system_prompt: str, user_prompt: str, temperature: float = 0.0) -> str:
+    @property
+    def live_failure(self) -> Optional[str]:
+        """Reason the live provider was disabled for this session (auth / billing error), if any."""
+        return getattr(self, "_live_failure", None)
+
+    def complete(self, system_prompt: str, user_prompt: str, temperature: float = 0.0,
+                 fallback_to_demo: bool = True, purpose: str = "unspecified") -> str:
         """
         Execute completion request. If no API key is available or demo_mode is True,
         returns structured reference responses without falsification.
+
+        fallback_to_demo=False makes a failed live call raise instead of returning the
+        canned demo response, so callers can use their own document-specific fallback.
+
+        After every call, `last_call` says who produced the text (provider, model, live or demo),
+        and the call is recorded in the research database's llm_calls table (no prompt text, no keys).
         """
+        self.last_model_used = None
+        self._served_by_demo = False
+        started = time.perf_counter()
+        error: Optional[str] = None
+        try:
+            return self._complete_impl(system_prompt, user_prompt, temperature, fallback_to_demo)
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {str(exc)[:300]}"
+            raise
+        finally:
+            live = not self._served_by_demo and error is None
+            self.last_call = {
+                "provider": self._provider if live else "demo",
+                "model": (self.last_model_used or self._model) if live else "deterministic reference (demo)",
+                "live": live,
+                "success": error is None,
+                "error": error,
+                "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+            }
+            self._log_call(purpose, system_prompt + "\n" + user_prompt)
+
+    def _log_call(self, purpose: str, prompt: str) -> None:
+        """Best-effort audit log; never lets a database problem break an LLM call."""
+        if os.getenv("LLM_CALL_LOGGING", "1") == "0":
+            return
+        try:
+            import hashlib
+            from ..storage import LLMCall, session_scope
+            c = self.last_call
+            with session_scope() as s:
+                s.add(LLMCall(purpose=purpose[:64], provider=c["provider"], model=c["model"][:128], live=c["live"],
+                              success=c["success"], error=c["error"], latency_ms=c["latency_ms"],
+                              prompt_sha256=hashlib.sha256(prompt.encode("utf-8", "ignore")).hexdigest()))
+        except Exception as exc:  # pragma: no cover - logging must never fail the caller
+            logger.debug(f"LLM call logging skipped: {exc}")
+
+    def _complete_impl(self, system_prompt: str, user_prompt: str, temperature: float,
+                       fallback_to_demo: bool) -> str:
         if self.demo_mode:
+            if not fallback_to_demo:
+                raise LLMConfigurationError("Demo mode: no live LLM configured.")
+            self._served_by_demo = True
             return self._demo_response(user_prompt)
 
         is_ready, status_desc = self.is_configured()
 
         if not is_ready:
             raise LLMConfigurationError(status_desc)
+
+        if self.live_failure:
+            # Circuit breaker: an auth/billing error won't fix itself mid-session.
+            if not fallback_to_demo:
+                raise LLMConfigurationError(self.live_failure)
+            self._served_by_demo = True
+            return self._demo_response(user_prompt, live_error=self.live_failure)
 
         # Call live provider
         try:
@@ -544,8 +616,16 @@ class ConfigurableLLMClient:
                 return self._call_anthropic(system_prompt, user_prompt, temperature)
         except Exception as e:
             logger.error(f"Live LLM call to {self._provider} failed: {e}")
-            return self._demo_response(user_prompt, live_error=str(e))
+            msg = str(e)
+            if any(tok in msg for tok in ("PERMISSION_DENIED", "BILLING_DISABLED", "UNAUTHENTICATED", "API key not valid", " 401", " 403")):
+                reason = "billing is disabled on the cloud project" if "BILLING_DISABLED" in msg else "the provider rejected the credentials"
+                self._live_failure = f"{self._provider} unavailable: {reason}"
+            if not fallback_to_demo:
+                raise
+            self._served_by_demo = True
+            return self._demo_response(user_prompt, live_error=msg)
 
+        self._served_by_demo = True
         return self._demo_response(user_prompt)
 
     def _call_vertex(self, system_prompt: str, user_prompt: str, temperature: float = 0.0) -> str:
@@ -598,36 +678,45 @@ class ConfigurableLLMClient:
             response_mime_type="application/json" if is_json else None
         )
 
-        try:
-            resp = client.models.generate_content(
-                model=self._model,
-                contents=user_prompt,
-                config=cfg
-            )
-            if resp and resp.text:
-                return resp.text
-            raise LLMConfigurationError(f"Gemini returned empty text for model '{self._model}'")
-        except Exception as e:
-            err_str = str(e)
-            if any(term in err_str for term in ("503", "UNAVAILABLE", "high demand", "504", "DEADLINE_EXCEEDED")):
-                logger.warning(
-                    f"Primary Gemini model '{self._model}' is experiencing temporary high demand ({type(e).__name__}). "
-                    f"Routing request through active Gemini flash fallback..."
-                )
-                for fallback_model in ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash"]:
-                    if fallback_model != self._model:
-                        try:
-                            fb_resp = client.models.generate_content(
-                                model=fallback_model,
-                                contents=user_prompt,
-                                config=cfg
-                            )
-                            if fb_resp and fb_resp.text:
-                                logger.info(f"Successfully generated using fallback {fallback_model}")
-                                return fb_resp.text
-                        except Exception as fb_err:
-                            logger.warning(f"Fallback {fallback_model} error: {fb_err}")
-            raise
+        # Primary model first, then the configured fallbacks. Overload errors (503/429/504) get a short
+        # backoff retry per model; any other error (auth, bad request) is raised immediately.
+        fallbacks = [m.strip() for m in os.getenv(
+            "GEMINI_FALLBACK_MODELS", "gemini-flash-latest,gemini-flash-lite-latest,gemini-3.1-flash-lite").split(",") if m.strip()]
+        models = [self._model] + [m for m in fallbacks if m != self._model]
+        # Models that were overloaded recently are tried last for a few minutes, so a busy primary
+        # model doesn't add its retry delay to every call.
+        now = time.time()
+        cooldown = getattr(self, "_model_cooldown", {})
+        self._model_cooldown = cooldown
+        models = [m for m in models if cooldown.get(m, 0) <= now] + [m for m in models if cooldown.get(m, 0) > now]
+        transient = ("503", "UNAVAILABLE", "high demand", "504", "DEADLINE_EXCEEDED", "429", "RESOURCE_EXHAUSTED")
+        last_err: Optional[Exception] = None
+        for model in models:
+            if cooldown.get(model, 0) > now and model != models[-1] and any(cooldown.get(m, 0) <= now for m in models):
+                continue  # skip cooling-down models while a healthy one remains
+            for attempt in range(2):
+                try:
+                    resp = client.models.generate_content(model=model, contents=user_prompt, config=cfg)
+                    if resp and resp.text:
+                        if model != self._model:
+                            logger.info(f"Gemini answered with fallback model '{model}' (primary '{self._model}' unavailable).")
+                        self.last_model_used = model
+                        return resp.text
+                    raise LLMConfigurationError(f"Gemini returned empty text for model '{model}'")
+                except Exception as e:
+                    last_err = e
+                    if not any(t in str(e) for t in transient):
+                        raise
+                    overloaded = any(t in str(e) for t in ("503", "UNAVAILABLE", "high demand"))
+                    retry = attempt == 0 and not overloaded  # retry rate limits/timeouts once; overload -> next model
+                    logger.warning(f"Gemini model '{model}' temporarily unavailable ({type(e).__name__}); "
+                                   f"{'retrying' if retry else 'trying next model'}.")
+                    if retry:
+                        time.sleep(2.0)
+                        continue
+                    cooldown[model] = time.time() + float(os.getenv("GEMINI_COOLDOWN_SECONDS", "300"))
+                    break
+        raise last_err if last_err else LLMConfigurationError("No Gemini model available.")
 
     def _call_gemini_rest(self, system_prompt: str, user_prompt: str, temperature: float) -> str:
         """Fallback REST caller for environments without google-genai SDK."""

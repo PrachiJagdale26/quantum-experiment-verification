@@ -10,50 +10,61 @@ enableXsrfProtection = false
 [client]
 toolbarMode = "minimal"
 
-# Visual identity: "cyanotype print". Status colors are reserved for verdicts.
-#   Cyanotype paper #E9EFF4 (page)   Prussian blue #132E52 (sidebar)   #183A66 (verdict print)
-#   Indigo ink #1D2240 (text)   Cyanotype #1F4E8C (actions)
-#   Verdigris #2E7D6B / text #24685A (pass)   Oxide red #B3362C (fail)
-#   Sodium #C98A12 / text #8A5A00 (inconclusive)
+# ---------------------------------------------------------------------------
+# Overlap design system, shared by the Overlap app and the full dashboard.
+# Deep indigo by night, lavender by day; Sora for text, lilac/indigo for
+# amplitudes and actions, mint / rose / gold for pass / fail / inconclusive.
+# ---------------------------------------------------------------------------
 [theme]
-base = "light"
-primaryColor = "#1F4E8C"
-backgroundColor = "#E9EFF4"
-secondaryBackgroundColor = "#DAE4EC"
-textColor = "#1D2240"
-linkColor = "#1F4E8C"
-borderColor = "#C3D0DB"
-dataframeBorderColor = "#C3D0DB"
-dataframeHeaderBackgroundColor = "#DAE4EC"
-greenColor = "#2E7D6B"
-greenTextColor = "#24685A"
-greenBackgroundColor = "#D6EAE3"
-redColor = "#B3362C"
-redTextColor = "#B3362C"
-redBackgroundColor = "#F3DEDB"
-orangeColor = "#C98A12"
-orangeTextColor = "#8A5A00"
-orangeBackgroundColor = "#F4E8CF"
-yellowColor = "#C98A12"
-yellowTextColor = "#8A5A00"
-yellowBackgroundColor = "#F4E8CF"
-blueColor = "#1F4E8C"
-blueTextColor = "#1F4E8C"
-blueBackgroundColor = "#D7E3F1"
-font = "Instrument Sans:https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap, sans-serif"
-headingFont = "STIX Two Text:https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap, serif"
-headingFontWeights = [600, 600, 600, 600, 400, 400]
-baseRadius = "4px"
-buttonRadius = "4px"
+font = "Sora:https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap"
+headingFont = "Sora:https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap"
+codeFont = "monospace"
+baseFontSize = 15
+baseFontWeight = 300
+headingFontWeights = [400, 400, 500, 500, 500, 500]
+headingFontSizes = ["2.1rem", "1.55rem", "1.2rem", "1.05rem", "1rem", "0.95rem"]
+baseRadius = "12px"
+buttonRadius = "12px"
 showWidgetBorder = true
-chartCategoricalColors = ["#1D2240", "#1F4E8C", "#2E7D6B", "#C98A12", "#B3362C", "#7A8AA6"]
+showSidebarBorder = false
+linkUnderline = false
 
-# The sidebar is the dark frame of the print.
-[theme.sidebar]
-backgroundColor = "#132E52"
-secondaryBackgroundColor = "#1E3F69"
-textColor = "#E8EEF5"
-primaryColor = "#9CC3F0"
-linkColor = "#9CC3F0"
-borderColor = "#2E537F"
-codeBackgroundColor = "#1E3F69"
+[theme.light]
+primaryColor = "#4b3fd6"
+backgroundColor = "#f6f5fd"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#1b1838"
+borderColor = "#dcd9f0"
+linkColor = "#4b3fd6"
+codeBackgroundColor = "#eceaf9"
+greenColor = "#0f7a5c"
+redColor = "#c42d4a"
+yellowColor = "#8f5e00"
+violetColor = "#4b3fd6"
+blueColor = "#4b3fd6"
+chartCategoricalColors = ["#4b3fd6", "#0f7a5c", "#c42d4a", "#8f5e00", "#8a84d9", "#5f5c84"]
+
+[theme.light.sidebar]
+backgroundColor = "#eceaf9"
+secondaryBackgroundColor = "#ffffff"
+borderColor = "#dcd9f0"
+
+[theme.dark]
+primaryColor = "#b9b2ff"
+backgroundColor = "#100f24"
+secondaryBackgroundColor = "#17153a"
+textColor = "#ecebff"
+borderColor = "#2b2858"
+linkColor = "#b9b2ff"
+codeBackgroundColor = "#131130"
+greenColor = "#5fe0b0"
+redColor = "#ff7d8c"
+yellowColor = "#f5c76b"
+violetColor = "#b9b2ff"
+blueColor = "#b9b2ff"
+chartCategoricalColors = ["#b9b2ff", "#5fe0b0", "#ff7d8c", "#f5c76b", "#7d74e8", "#a3a1cc"]
+
+[theme.dark.sidebar]
+backgroundColor = "#131130"
+secondaryBackgroundColor = "#17153a"
+borderColor = "#2b2858"

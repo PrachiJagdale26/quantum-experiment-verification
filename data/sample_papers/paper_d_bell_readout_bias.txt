@@ -1,0 +1,25 @@
+Asymmetric Bell-Pair Statistics Under Readout Bias on Superconducting Transmon Devices
+
+SYNTHETIC SAMPLE PAPER: written to demonstrate the research-gap pipeline. Not a real publication.
+
+Abstract
+We report Bell-pair measurement statistics on a superconducting transmon device that deviate strongly from the symmetric ideal. We attribute the asymmetry to amplitude-damping during readout and characterise its dependence on measurement delay.
+
+Methodology
+The same Hadamard-plus-CNOT circuit is run on a cloud-accessible superconducting transmon device with 4096 shots per configuration. No readout calibration matrix is applied.
+
+Experiment 1: Two-qubit Bell state on a 2-qubit register
+We prepare the state on 2 qubits. H gate on qubit 0, then CX gate on qubits 0, 1.
+We measured P(00) = 0.7 and P(11) = 0.3, which we interpret as an intrinsic property of the device.
+
+Results
+We found a population imbalance of 40 percentage points between |00> and |11>. The results indicate that readout delay above 2 microseconds increases the imbalance.
+
+Limitations
+We did not apply readout error mitigation in any of the runs. The analysis cannot separate state-preparation error from measurement error.
+
+Future Work
+A controlled comparison with readout-error-mitigated runs is left for future work.
+
+References
+[1] Preskill, Quantum Computing in the NISQ era and beyond.

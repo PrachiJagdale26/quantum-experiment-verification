@@ -1,0 +1,602 @@
+{
+  "benchmark": "known-work novelty",
+  "date": "2026-11-27T19:49:36.426824+00:00",
+  "duration_s": 65.9,
+  "procedure": "Known-work novelty benchmark: the main evaluation of Phase 4.\n\nProcedure (ground truth is objective: the work IS published):\n  1. Take analysed, real (non-synthetic, not excluded, collected) publications with an abstract.\n  2. Turn each paper's own verified research question / objective / problem statement into a candidate gap.\n  3. Remove that paper from the local corpus for this check, and run the full novelty investigation\n     (external search, citations, comparison, rule-based classification).\n  4. A \"potentially unexplored\" verdict is a FALSE NOVELTY: the question is published.\n\nMetrics: false-novelty rate, detection rate (already or partially investigated), insufficient-coverage rate,\nrecall of the source paper among screened publications and among the compared top-k, and MRR of the source paper.\nEvery run writes its full procedure, configuration, per-item results and limitations to JSON.",
+  "metrics": {
+    "items": 15,
+    "false_novelty_rate": 0.0,
+    "false_novelty_ci95": [
+      0.0,
+      0.204
+    ],
+    "detection_rate": 1.0,
+    "insufficient_coverage_rate": 0.0,
+    "by_classification": {
+      "already_investigated": 15,
+      "partially_investigated": 0,
+      "conflicting_findings": 0,
+      "potentially_unexplored": 0,
+      "insufficient_coverage": 0
+    },
+    "recall_screened": 0.933,
+    "recall_compared_top_k": 0.867,
+    "mrr_compared": 0.776,
+    "decided_by_source_paper": 11,
+    "distinct_core_dimension_sets": 4,
+    "controls_not_already": 5,
+    "controls_implausible": 5,
+    "positive_control_detected": true
+  },
+  "items": [
+    {
+      "publication_id": 1,
+      "title": "Dynamical Scalar Field Theory: A Unified Framework for Quantum Entanglement, Decoherence, and Macroscopic Quantum Correlations",
+      "question": "To present the Dynamical Scalar Field Theory (DSFT) as a framework that explains quantum entanglement as a topological remnant and geometric property of spacetime.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.82,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 2,
+      "decided_by_source_paper": false,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 75,
+      "queries": [
+        "present Dynamical Scalar Field Theory DSFT framework explains quantum entanglement topological remnant",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 2,
+      "title": "Dynamical Scalar Field Theory: A Unified Framework for Quantum Entanglement, Decoherence, and Testable Predictions",
+      "question": "To present Dynamical Scalar Field Theory (DSFT) as a complete and self-consistent framework explaining quantum entanglement, decoherence, and testable predictions.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.78,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 78,
+      "queries": [
+        "present Dynamical Scalar Field Theory DSFT complete self-consistent framework explaining quantum entanglement",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 5,
+      "title": "On the Capacity of the Quantum Switch With and Without Entanglement Decoherence",
+      "question": "Characterize the switch capacity region for both decoherence models and propose throughput-optimal policies based on gradient descent.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.79,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 91,
+      "queries": [
+        "Characterize switch capacity region both decoherence models propose throughput-optimal policies gradient descent",
+        "Characterize switch capacity region both decoherence entanglement",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 6,
+      "title": "Qudits for witnessing quantum-gravity-induced entanglement of masses under decoherence",
+      "question": "Exploring extensions of the QGEM experiment to multidimensional quantum objects and examining different experiment geometries to determine which generates entanglement faster.",
+      "field": "research_problem",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.74,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 72,
+      "queries": [
+        "Exploring extensions QGEM experiment multidimensional quantum objects examining different geometries determine generates",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 7,
+      "title": "Quantum Entanglement and Non-Local Decoherence",
+      "question": "Why quantum entanglement and decoherence appear to violate the speed of light.",
+      "field": "research_problem",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.85,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 76,
+      "queries": [
+        "Why quantum entanglement decoherence appear violate speed light",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 8,
+      "title": "Exploring the Interplay Between Quantum Entanglement and Decoherence",
+      "question": "The degradation of quantum coherence and entanglement due to environmental interaction and decoherence mechanisms.",
+      "field": "research_problem",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.81,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 78,
+      "queries": [
+        "degradation quantum coherence entanglement due environmental interaction decoherence mechanisms",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 9,
+      "title": "Quantum Mechanical Reality: Entanglement and Decoherence",
+      "question": "The ontology of quantum theory as distinct from classical theory, focusing on entanglement and decoherence.",
+      "field": "research_problem",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.71,
+      "false_novelty": false,
+      "found_in_screened": false,
+      "rank_in_compared": null,
+      "decided_by_source_paper": false,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 76,
+      "queries": [
+        "ontology quantum theory distinct classical focusing entanglement decoherence",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 10,
+      "title": "Decoherence of Entanglement and Quantum Memory Dynamics of Two Strongly Coupled Semiconductor Quantum Dots",
+      "question": "Investigate the dynamics of two-qubit quantum-memory-assisted (QMA) entropic uncertainty relation and entanglement in a system comprising two strongly coupled semiconductor pair quantum dots (SPQD)",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "platform": [
+          "spin qubits"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.86,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 76,
+      "queries": [
+        "Investigate dynamics two-qubit quantum-memory-assisted QMA entropic uncertainty relation entanglement system comprising two",
+        "entanglement spin qubits",
+        "entangled spin qubits"
+      ]
+    },
+    {
+      "publication_id": 11,
+      "title": "Probing tripartite entanglement and coherence dynamics in pure and mixed independent classical environments",
+      "question": "Dynamics of entanglement and coherence for three non-interacting qubits initially prepared as maximally entangled GHZ-like state coupled with independent classical environments.",
+      "field": "research_problem",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.74,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 82,
+      "queries": [
+        "Dynamics entanglement coherence three non-interacting qubits initially prepared maximally entangled GHZ-like state",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 12,
+      "title": "Gravitational decoherence by the apparatus in the quantum-gravity induced entanglement of masses",
+      "question": "Study under what conditions the entanglement between two light systems evades the decoherence induced by the heavy systems",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.71,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 7,
+      "decided_by_source_paper": false,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 78,
+      "queries": [
+        "what conditions entanglement two light systems evades decoherence induced heavy",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 13,
+      "title": "Satellite-Aided Entanglement Distribution for Optimized Quantum Networks",
+      "question": "Supplement the optimized quantum network with Satellite-aided Entanglement Distribution (SED) to minimize the amount of qubits used in pre-distribution.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "method": [
+          "quantum communication"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.79,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 100,
+      "queries": [
+        "Supplement optimized quantum network Satellite-aided Entanglement Distribution SED minimize amount qubits pre-distribution",
+        "entanglement quantum communication",
+        "entangled quantum communication",
+        "quantum communication"
+      ]
+    },
+    {
+      "publication_id": 14,
+      "title": "Decoherence dynamics of entangled quantum states in the $XXX$ central spin model",
+      "question": "To analytically obtain the evolutions of fidelity, entanglement, and quantum coherence for quantum states with different initial entanglement in the XXX central spin model.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.71,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 81,
+      "queries": [
+        "analytically obtain evolutions fidelity entanglement quantum coherence states different initial XXX central",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 15,
+      "title": "Quantum Gravity and Entanglement in Particle Physics and Gravitation",
+      "question": "Some approaches to Quantum Gravity (QG) entail decoherence of quantum matter propagating in it, due to an environment of QG degrees of freedom inaccessible to low-energy observers.",
+      "field": "research_problem",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.76,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": null,
+      "decided_by_source_paper": false,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 92,
+      "queries": [
+        "Some Quantum Gravity entail decoherence matter propagating due environment degrees freedom inaccessible",
+        "Some Quantum Gravity entail decoherence matter entanglement",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    },
+    {
+      "publication_id": 16,
+      "title": "Distributing Quantum Circuits Using Pre-Distributed Entanglement Pairs over Quantum Networks",
+      "question": "Minimize the execution time of the circuit by utilizing pre-distributed entanglement pairs and optimizing resource allocation.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "method": [
+          "quantum communication",
+          "quantum error correction"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.77,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 109,
+      "queries": [
+        "Minimize execution time circuit utilizing pre-distributed entanglement pairs optimizing resource allocation",
+        "entanglement quantum communication",
+        "entangled quantum communication",
+        "quantum communication"
+      ]
+    },
+    {
+      "publication_id": 17,
+      "title": "Quantum metrology in the noisy intermediate-scale quantum era",
+      "question": "Review the principle, categories, and applications of quantum metrology, with special attention to quantum resources and active control of the no-go theorem under different kinds of noise-induced decoherence.",
+      "field": "objective",
+      "core_dimensions": {
+        "phenomenon": [
+          "entanglement"
+        ],
+        "noise": [
+          "decoherence"
+        ]
+      },
+      "classification": "already_investigated",
+      "confidence": 0.77,
+      "false_novelty": false,
+      "found_in_screened": true,
+      "rank_in_compared": 1,
+      "decided_by_source_paper": true,
+      "sources_ok": [
+        "arxiv",
+        "crossref",
+        "openalex"
+      ],
+      "screened": 96,
+      "queries": [
+        "Review principle categories applications quantum metrology special attention resources active control no-go",
+        "Review principle categories applications quantum metrology entanglement",
+        "entanglement decoherence",
+        "entangled decoherence"
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "gap": "Study barren plateaus on nv centers under leakage.",
+      "positive_control": false,
+      "classification": "potentially_unexplored",
+      "confidence": 0.56,
+      "closest": {
+        "title": "barren plateau",
+        "same": 1,
+        "similarity": 0.578
+      }
+    },
+    {
+      "gap": "Study measurement-induced phase transitions on photonic qubits under crosstalk.",
+      "positive_control": false,
+      "classification": "partially_investigated",
+      "confidence": 0.59,
+      "closest": {
+        "title": "Multizone Trapped-Ion Qubit Control in an Integrated Photonics QCCD Device",
+        "same": 2,
+        "similarity": 0.508
+      }
+    },
+    {
+      "gap": "Study barren plateaus on topological qubits under non-markovian noise.",
+      "positive_control": false,
+      "classification": "potentially_unexplored",
+      "confidence": 0.56,
+      "closest": {
+        "title": "Illustration of Barren Plateaus in Quantum Computing",
+        "same": 1,
+        "similarity": 0.728
+      }
+    },
+    {
+      "gap": "Study quantum machine learning on nv centers under leakage.",
+      "positive_control": false,
+      "classification": "partially_investigated",
+      "confidence": 0.62,
+      "closest": {
+        "title": "From membership-privacy leakage to quantum machine unlearning",
+        "same": 2,
+        "similarity": 0.609
+      }
+    },
+    {
+      "gap": "Study tomography on topological qubits under non-markovian noise.",
+      "positive_control": false,
+      "classification": "partially_investigated",
+      "confidence": 0.67,
+      "closest": {
+        "title": "Dynamical quantum maps for single-qubit gates under universal non-Markovian noise",
+        "same": 2,
+        "similarity": 0.594
+      }
+    },
+    {
+      "gap": "Study quantum error correction on trapped ions under depolarizing noise.",
+      "positive_control": true,
+      "classification": "already_investigated",
+      "confidence": 0.79,
+      "closest": {
+        "title": "Logical quantum circuits protected by the Steane code for specific noises in trapped ions",
+        "same": 3,
+        "similarity": 0.72
+      }
+    }
+  ],
+  "limitations": [
+    "The gap text is the paper's own sentence, so the exact-keyword query shares wording with the target; this makes retrieval easier than for a gap phrased independently. Recall is therefore an upper bound.",
+    "Dimensions missing from the sentence are filled from the source paper's own tags (as for real gaps).",
+    "The source paper stays in the external indexes; only the local corpus excludes it.",
+    "Comparisons use titles and abstracts; papers without abstracts are compared on titles.",
+    "Thresholds in CoveragePolicy were set before this run; tuning them on this set would overfit.",
+    "A small set: rates have wide uncertainty (Wilson 95% interval reported).",
+    "If most questions share the corpus topic (see distinct_core_dimension_sets), the set cannot separate a good checker from one that always answers 'already investigated'; the specificity control is reported for that reason.",
+    "Ontology surface forms are matched without word sense: 'leakage' also matches privacy leakage, and 'integrated photonics' marks a trapped-ion device as photonic."
+  ],
+  "configuration": {
+    "sources": [
+      "openalex",
+      "arxiv",
+      "crossref"
+    ],
+    "per_query": 10,
+    "top_k": 8,
+    "max_queries": 5,
+    "citations": true,
+    "llm_judge": null,
+    "embedding_model": "all-MiniLM-L6-v2",
+    "policy": {
+      "min_sources_ok": 2,
+      "min_queries": 3,
+      "min_screened": 15,
+      "already_similarity": 0.55,
+      "partial_similarity": 0.45
+    }
+  }
+}

@@ -1,219 +1,279 @@
 """
-Vector Store implementation for Quantum Literature RAG.
-Supports ChromaDB with Sentence-Transformers embeddings, plus an in-memory
-vector/BM25 fallback for deterministic offline operations.
-Stores chunk metadata (filename, page number, chunk ID, title) for traceable citations.
+Vector store for the quantum literature knowledge base.
+
+Primary backend: ChromaDB (persistent, cosine distance) with Sentence-Transformers embeddings.
+Fallback backend: an in-memory word-count cosine matcher. It is NOT semantic; when it is in use
+the knowledge base reports itself as degraded (see `backend`) and logs a warning, and with
+KB_REQUIRE_SEMANTIC=1 it refuses to start instead of degrading.
+
+Every chunk keeps its citation metadata (source file, page, chunk id, title).
 """
 
-import os
+import logging
 import math
+import os
 import re
-from typing import List, Dict, Any, Optional
 from collections import Counter
+from typing import Any, Dict, List, Optional
 
 from ..document_processing.chunker import DocumentChunk, TraceableChunker
 from .starter_corpus import STARTER_DOCUMENTS
 
-# Try importing ChromaDB
+logger = logging.getLogger(__name__)
+
 try:
     import chromadb
-    from chromadb.config import Settings
     HAS_CHROMADB = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on environment
     HAS_CHROMADB = False
 
-# Try importing SentenceTransformers
 try:
     from sentence_transformers import SentenceTransformer
     HAS_ST = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on environment
     HAS_ST = False
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_MODEL_CACHE: Dict[str, Any] = {}   # one embedding model per process, not per knowledge base
+
+
+class KnowledgeBaseUnavailable(RuntimeError):
+    """Raised when semantic retrieval is required but not available."""
+
+
+def _load_embedding_model(name: str):
+    if name not in _MODEL_CACHE:
+        _MODEL_CACHE[name] = SentenceTransformer(name)
+    return _MODEL_CACHE[name]
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]+", "_", text).strip("_").lower()[:40]
 
 
 class FallbackVectorStore:
     """
-    Lightweight, fast in-memory TF-IDF cosine-similarity vector store.
-    Guarantees that semantic retrieval and citation tracking work deterministically
-    even when external model downloads are restricted or ChromaDB is loading.
+    In-memory word-count cosine matcher (bag of words, no IDF, no semantics).
+    Kept as a last-resort backend and as the lexical index; never presented as semantic search.
     """
     def __init__(self):
         self.documents: List[Dict[str, Any]] = []
+        self._ids: set = set()
 
     def add(self, chunk: DocumentChunk, title: str):
+        if chunk.chunk_id in self._ids:
+            return
+        self._ids.add(chunk.chunk_id)
         tokens = self._tokenize(chunk.text)
         self.documents.append({
-            "chunk_id": chunk.chunk_id,
-            "text": chunk.text,
-            "source_filename": chunk.source_filename,
-            "page_number": chunk.page_number,
-            "title": title,
-            "tokens": tokens,
-            "tf": Counter(tokens)
+            "chunk_id": chunk.chunk_id, "text": chunk.text, "source_filename": chunk.source_filename,
+            "page_number": chunk.page_number, "title": title, "tokens": tokens, "tf": Counter(tokens),
         })
 
-    def _tokenize(self, text: str) -> List[str]:
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
         return re.findall(r"\b[a-zA-Z0-9_\-]+\b", text.lower())
 
     def search(self, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
-        q_tokens = self._tokenize(query)
-        if not q_tokens or not self.documents:
+        q_tf = Counter(self._tokenize(query))
+        if not q_tf or not self.documents:
             return []
-
-        q_tf = Counter(q_tokens)
+        norm_q = math.sqrt(sum(v * v for v in q_tf.values()))
         results = []
-
         for doc in self.documents:
-            # Cosine similarity on word frequency
             dot = sum(q_tf[w] * doc["tf"].get(w, 0) for w in q_tf)
-            norm_q = math.sqrt(sum(v * v for v in q_tf.values()))
             norm_d = math.sqrt(sum(v * v for v in doc["tf"].values()))
-            score = (dot / (norm_q * norm_d)) if (norm_q > 0 and norm_d > 0) else 0.0
-
-            results.append({
-                "chunk_id": doc["chunk_id"],
-                "text": doc["text"],
-                "source_filename": doc["source_filename"],
-                "page_number": doc["page_number"],
-                "title": doc["title"],
-                "score": round(score, 4)
-            })
-
+            score = (dot / (norm_q * norm_d)) if norm_d > 0 else 0.0
+            results.append({k: doc[k] for k in ("chunk_id", "text", "source_filename", "page_number", "title")}
+                           | {"score": round(score, 4), "retrieval": "word_match"})
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
 
 
 class QuantumKnowledgeBase:
-    """
-    Manages semantic storage, embedding, and traceable retrieval of quantum literature.
-    """
+    """Semantic storage and traceable retrieval of quantum literature."""
 
-    def __init__(self, persist_dir: str = "./chroma_db", collection_name: str = "quantum_literature"):
-        self.persist_dir = persist_dir
-        self.collection_name = collection_name
+    def __init__(self, persist_dir: Optional[str] = None, collection_name: str = "quantum_literature",
+                 require_semantic: Optional[bool] = None):
+        self.persist_dir = persist_dir or os.getenv("CHROMA_PERSIST_DIRECTORY") or os.path.join(ROOT, "chroma_db")
+        self.model_name = os.getenv("EMBEDDING_MODEL_NAME") or "all-MiniLM-L6-v2"
         self.fallback = FallbackVectorStore()
         self.chroma_client = None
         self.collection = None
         self.embedding_model = None
         self.use_chroma = False
-
+        self.degraded_reasons: List[str] = []
+        if require_semantic is None:
+            require_semantic = os.getenv("KB_REQUIRE_SEMANTIC", "0") == "1"
+        # Collections are per embedding model so vectors from different models are never mixed.
+        self.collection_name = f"{collection_name}__{_slug(self.model_name)}__cosine"
         self._initialize_backends()
+        self._hydrate_lexical()
+        if require_semantic and not self.is_semantic:
+            raise KnowledgeBaseUnavailable("Semantic retrieval required but unavailable: " + "; ".join(self.degraded_reasons))
 
-    def _initialize_backends(self):
-        """Attempt to initialize ChromaDB and SentenceTransformer; fall back if needed."""
-        if HAS_CHROMADB:
+    # ----------------------------------------------------------------- setup
+    def _initialize_backends(self) -> None:
+        if not HAS_ST:
+            self.degraded_reasons.append("sentence-transformers is not installed")
+        else:
+            try:
+                self.embedding_model = _load_embedding_model(self.model_name)
+            except Exception as exc:
+                self.degraded_reasons.append(f"embedding model '{self.model_name}' failed to load: {exc}")
+
+        if not HAS_CHROMADB:
+            self.degraded_reasons.append("chromadb is not installed")
+        elif self.embedding_model is not None:
             try:
                 os.makedirs(self.persist_dir, exist_ok=True)
                 self.chroma_client = chromadb.PersistentClient(path=self.persist_dir)
-                self.collection = self.chroma_client.get_or_create_collection(name=self.collection_name)
+                self.collection = self.chroma_client.get_or_create_collection(
+                    name=self.collection_name,
+                    metadata={"hnsw:space": "cosine", "embedding_model": self.model_name})
                 self.use_chroma = True
-            except Exception:
-                self.use_chroma = False
+            except Exception as exc:
+                self.degraded_reasons.append(f"ChromaDB failed to open at {self.persist_dir}: {exc}")
 
-        if HAS_ST:
-            try:
-                # Load lightweight standard embedding model
-                model_name = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
-                self.embedding_model = SentenceTransformer(model_name)
-            except Exception:
-                self.embedding_model = None
+        if self.degraded_reasons:
+            logger.warning("Knowledge base is DEGRADED (word matching, not semantic): " + "; ".join(self.degraded_reasons))
 
+    def _hydrate_lexical(self) -> None:
+        """After a restart Chroma still holds every chunk; load them so keyword search covers the same corpus."""
+        if not self.use_chroma:
+            return
+        try:
+            got = self.collection.get(include=["documents", "metadatas"])
+            for cid, text, meta in zip(got.get("ids", []), got.get("documents", []), got.get("metadatas", [])):
+                meta = meta or {}
+                self.fallback.add(DocumentChunk(chunk_id=cid, text=text or "", source_filename=meta.get("source_filename", ""),
+                                                page_number=meta.get("page_number"), section_name=None,
+                                                char_start=0, char_end=len(text or "")), meta.get("title", ""))
+        except Exception as exc:
+            logger.error(f"Could not load stored chunks for keyword search: {exc}")
+
+    @property
+    def is_semantic(self) -> bool:
+        return self.use_chroma and self.embedding_model is not None
+
+    @property
+    def backend(self) -> Dict[str, Any]:
+        """What retrieval is actually running on: shown in the UI and recorded with results."""
+        return {
+            "vector_store": "chromadb (cosine)" if self.use_chroma else "in-memory word match",
+            "embedding_model": self.model_name if self.embedding_model is not None else None,
+            "semantic": self.is_semantic,
+            "persist_dir": self.persist_dir if self.use_chroma else None,
+            "collection": self.collection_name if self.use_chroma else None,
+            "degraded_reasons": list(self.degraded_reasons),
+        }
+
+    def describe(self) -> str:
+        b = self.backend
+        if b["semantic"]:
+            return f"Semantic search: ChromaDB + {b['embedding_model']}"
+        return "Word matching only (not semantic): " + "; ".join(b["degraded_reasons"])
+
+    # ------------------------------------------------------------------ write
     def index_chunks(self, chunks: List[DocumentChunk], source_title: str) -> int:
-        """Add traceable document chunks into the knowledge base."""
+        """Add traceable chunks. Chroma write failures are logged and reported, not swallowed."""
         if not chunks:
             return 0
-
-        # Always index into fallback store to ensure zero-failure retrieval
         for ch in chunks:
             self.fallback.add(ch, source_title)
 
-        if self.use_chroma and self.collection:
+        if self.is_semantic:
             try:
-                ids = [ch.chunk_id for ch in chunks]
                 texts = [ch.text for ch in chunks]
-                metadatas = [
-                    {
-                        "source_filename": ch.source_filename,
-                        "page_number": ch.page_number or 1,
-                        "title": source_title,
-                        "chunk_id": ch.chunk_id
-                    }
-                    for ch in chunks
-                ]
-
-                embeddings = None
-                if self.embedding_model:
-                    embeddings = self.embedding_model.encode(texts).tolist()
-
-                if embeddings:
-                    self.collection.upsert(ids=ids, documents=texts, metadatas=metadatas, embeddings=embeddings)
-                else:
-                    self.collection.upsert(ids=ids, documents=texts, metadatas=metadatas)
-            except Exception:
-                # If ChromaDB write fails, fallback store remains fully active
-                pass
-
+                embeddings = self.embedding_model.encode(texts, normalize_embeddings=True).tolist()
+                self.collection.upsert(
+                    ids=[ch.chunk_id for ch in chunks], documents=texts, embeddings=embeddings,
+                    metadatas=[{"source_filename": ch.source_filename, "page_number": ch.page_number or 1,
+                                "title": source_title, "chunk_id": ch.chunk_id} for ch in chunks])
+            except Exception as exc:
+                reason = f"ChromaDB write failed: {exc}"
+                logger.error(reason)
+                if reason not in self.degraded_reasons:
+                    self.degraded_reasons.append(reason)
         return len(chunks)
 
+    # ------------------------------------------------------------------- read
     def retrieve(self, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
-        """
-        Retrieve relevant literature passages with verified citation metadata.
-        """
-        if self.use_chroma and self.collection and self.collection.count() > 0:
+        """Top passages with citation metadata. Each hit says which retrieval produced it."""
+        if self.is_semantic and self.collection.count() > 0:
             try:
-                if self.embedding_model:
-                    q_emb = self.embedding_model.encode([query]).tolist()
-                    res = self.collection.query(query_embeddings=q_emb, n_results=top_k)
-                else:
-                    res = self.collection.query(query_texts=[query], n_results=top_k)
-
-                results = []
-                if res and "documents" in res and res["documents"]:
-                    docs = res["documents"][0]
-                    metas = res["metadatas"][0] if "metadatas" in res else [{}] * len(docs)
-                    distances = res["distances"][0] if "distances" in res and res["distances"] else [0.0] * len(docs)
-
-                    for d, m, dist in zip(docs, metas, distances):
-                        # Convert distance to similarity score
-                        sim_score = max(0.0, 1.0 - (dist / 2.0)) if dist is not None else 0.8
-                        results.append({
-                            "chunk_id": m.get("chunk_id", "unknown"),
-                            "text": d,
-                            "source_filename": m.get("source_filename", "literature"),
-                            "page_number": m.get("page_number", 1),
-                            "title": m.get("title", "Quantum Paper"),
-                            "score": round(sim_score, 4)
-                        })
-                    if results:
-                        return results
-            except Exception:
-                pass
-
-        # Use fallback engine
+                q_emb = self.embedding_model.encode([query], normalize_embeddings=True).tolist()
+                res = self.collection.query(query_embeddings=q_emb, n_results=min(top_k, self.collection.count()))
+                docs = (res.get("documents") or [[]])[0]
+                metas = (res.get("metadatas") or [[{}] * len(docs)])[0]
+                dists = (res.get("distances") or [[None] * len(docs)])[0]
+                return [{
+                    "chunk_id": m.get("chunk_id", "unknown"), "text": d,
+                    "source_filename": m.get("source_filename"), "page_number": m.get("page_number"),
+                    "title": m.get("title"),
+                    # cosine distance in [0, 2] -> cosine similarity in [-1, 1], clipped to [0, 1]
+                    "score": round(max(0.0, 1.0 - dist), 4) if dist is not None else None,
+                    "retrieval": f"semantic:{self.model_name}",
+                } for d, m, dist in zip(docs, metas, dists)]
+            except Exception as exc:
+                logger.error(f"Semantic retrieval failed, using word matching for this query: {exc}")
         return self.fallback.search(query, top_k=top_k)
 
+    def retrieve_hybrid(self, query: str, top_k: int = 5, expand: bool = True, rrf_k: int = 60) -> List[Dict[str, Any]]:
+        """
+        Hybrid retrieval: semantic (embeddings) + BM25 keywords over the query and its ontology variants,
+        merged by reciprocal rank fusion. Each hit lists which retrievers and queries found it; scores are
+        ranking signals, never evidence that two passages say the same thing.
+        """
+        from .lexical import BM25Index
+        from .ontology import expand_query
+
+        if not hasattr(self, "_bm25") or self._bm25.documents is not self.fallback.documents:
+            self._bm25 = BM25Index(self.fallback.documents)
+        variants = expand_query(query) if expand else [(query, "exact")]
+        pool = max(top_k * 3, 10)
+        fused: Dict[str, Dict[str, Any]] = {}
+
+        # Synonym variants are near-equivalent wording; related-concept variants are only hints.
+        weight = {"semantic": 1.0, "bm25": 1.0, "bm25-synonym": 0.6, "bm25-related": 0.3}
+
+        def add(hit: Dict[str, Any], rank: int, how: str, q: str):
+            entry = fused.setdefault(hit["chunk_id"], {**{k: hit.get(k) for k in ("chunk_id", "text", "source_filename",
+                                                                                  "page_number", "title")},
+                                                      "rrf": 0.0, "found_by": [], "semantic": None, "bm25": None})
+            entry["rrf"] += weight.get(how, 0.5) / (rrf_k + rank)
+            entry["found_by"].append(f"{how}:{q}" if q != query else how)
+            if how == "semantic":
+                entry["semantic"] = hit.get("score")
+            elif how.startswith("bm25"):
+                entry["bm25"] = max(entry["bm25"] or 0.0, hit.get("bm25") or 0.0)
+
+        if self.is_semantic:
+            for r, h in enumerate(self.retrieve(query, top_k=pool), 1):
+                add(h, r, "semantic", query)
+        for q, kind in variants:
+            for r, h in enumerate(self._bm25.search(q, top_k=pool), 1):
+                add(h, r, "bm25" if kind == "exact" else f"bm25-{kind}", q)
+        ranked = sorted(fused.values(), key=lambda e: e["rrf"], reverse=True)[:top_k]
+        for e in ranked:
+            e["rrf"] = round(e["rrf"], 5)
+            e["score"] = e["semantic"] if e["semantic"] is not None else 0.0
+            e["retrieval"] = "hybrid"
+        return ranked
+
     def seed_starter_corpus(self) -> int:
-        """Load built-in authoritative quantum computing papers if knowledge base is empty."""
+        """Index the built-in reference texts (textbook-style summaries, see starter_corpus.py)."""
         chunker = TraceableChunker(chunk_size=500, chunk_overlap=80)
-        total_chunks = 0
-
+        total = 0
         for doc in STARTER_DOCUMENTS:
-            fname = doc["filename"]
-            title = doc["title"]
-            pages = doc.get("pages", [])
-
-            chunks = chunker.chunk_document(full_text="", source_filename=fname, pages=pages)
-            added = self.index_chunks(chunks, source_title=title)
-            total_chunks += added
-
-        return total_chunks
+            chunks = chunker.chunk_document(full_text="", source_filename=doc["filename"], pages=doc.get("pages", []))
+            total += self.index_chunks(chunks, source_title=doc["title"])
+        return total
 
     def count(self) -> int:
-        """Return total number of indexed passages."""
-        if self.use_chroma and self.collection:
+        if self.is_semantic:
             try:
-                cnt = self.collection.count()
-                if cnt > 0:
-                    return cnt
-            except Exception:
-                pass
+                return self.collection.count()
+            except Exception as exc:
+                logger.error(f"ChromaDB count failed: {exc}")
         return len(self.fallback.documents)

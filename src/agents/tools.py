@@ -81,13 +81,14 @@ def extract_document_tool(
     extracted_text = raw_text
 
     # 1. If file_bytes provided, run DocumentExtractor
+    extracted_doc = None
     if file_bytes:
         doc_extractor = DocumentExtractor()
         extracted_doc = doc_extractor.extract_from_bytes(file_bytes, filename=filename or "proposal.pdf")
-        extracted_text = extracted_doc.text
+        extracted_text = extracted_doc.full_text
         doc_meta = {
-            "page_count": extracted_doc.page_count,
-            "has_math": extracted_doc.has_math,
+            "page_count": len(extracted_doc.pages),
+            "has_math": bool(extracted_doc.math_expressions),
             "sections": list(extracted_doc.sections.keys()),
         }
 
@@ -102,23 +103,40 @@ def extract_document_tool(
     paper_analysis = None
 
     if doc_type == "research_paper":
-        paper_analysis = extractor.extract_research_paper(extracted_text, document_title=filename)
-        if paper_analysis.quantum_experiments:
-            primary_exp = paper_analysis.quantum_experiments[0]
+        paper_analysis = extractor.extract_research_paper(extracted_text, document_title=filename, extracted_doc=extracted_doc)
+        if paper_analysis.experiments:
+            # Verify the paper's first executable experiment (or its first experiment if none is executable).
+            primary_exp = next((e for e in paper_analysis.experiments if e.has_executable_circuit), paper_analysis.experiments[0])
+            circuit, missing = None, []
+            if primary_exp.gates and primary_exp.num_qubits:
+                try:
+                    circuit = CircuitSpec(num_qubits=primary_exp.num_qubits, gates=primary_exp.gates)
+                except Exception as exc:
+                    missing.append(f"Circuit specification error: {exc}")
+            if not primary_exp.num_qubits:
+                missing.append("Number of qubits not specified.")
+            if not primary_exp.gates:
+                missing.append("No quantum gate sequence or circuit diagram provided.")
+            if not primary_exp.expected_outcomes:
+                missing.append("No expected measurement distribution specified.")
+            claims = (paper_analysis.key_claims or paper_analysis.results_and_findings)[:3]
             proposal_spec = ProposalSpecification(
-                title=f"{paper_analysis.title}: {primary_exp.experiment_name}",
-                objective=primary_exp.objective or paper_analysis.title,
-                hypothesis=f"Algorithmic verification for {paper_analysis.algorithmic_framework or 'quantum model'}",
+                title=f"{paper_analysis.title}: {primary_exp.title}",
+                objective=paper_analysis.research_objective or paper_analysis.title,
+                hypothesis=primary_exp.findings or paper_analysis.research_problem,
+                quantum_system=primary_exp.quantum_system,
                 num_qubits=primary_exp.num_qubits,
-                circuit=primary_exp.circuit,
+                circuit=circuit,
                 expected_outcomes=primary_exp.expected_outcomes,
                 author_claims=[
-                    ExtractedClaim(claim_id=f"CLM-{i+1:02d}", claim_text=c, claim_category="Theoretical")
-                    for i, c in enumerate(paper_analysis.primary_findings[:3])
+                    ExtractedClaim(claim_id=f"CLM-{i+1:02d}", claim_type="outcome", statement=c)
+                    for i, c in enumerate(claims)
                 ],
-                missing_information=primary_exp.missing_parameters or paper_analysis.limitations_and_assumptions,
-                potential_inconsistencies=[],
-                raw_extracted_text=extracted_text[:1000],
+                missing_information=missing,
+                raw_text=extracted_text,
+                source_filename=filename,
+                document_type="research_paper",
+                doi=paper_analysis.doi,
             )
         else:
             proposal_spec = extractor.extract(extracted_text, document_title=filename)

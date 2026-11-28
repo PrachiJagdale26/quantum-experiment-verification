@@ -21,6 +21,9 @@ __pycache__/
 *.env.local
 *.json
 !data/benchmark_cases/*.json
+!data/sample_papers/*.json
+!data/benchmark/**/*.json
+!tests/fixtures/**/*.json
 *service-account*.json
 *credential*.json
 credentials/
@@ -45,3 +48,17 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Research database (local, reproducible runs)
+data/research.db
+data/research.db-*
+data/benchmark/*.db
+data/benchmark/*.db-*
+data/benchmark/labels/
+data/checkpoints.db
+data/checkpoints.db-*
+data/reports/
+
+# Literature collection: HTTP cache and downloaded open-access full text
+data/cache/
+data/fulltext/

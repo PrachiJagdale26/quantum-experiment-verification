@@ -1,0 +1,20 @@
+{
+  "description": "Ground-truth gaps deliberately written into the synthetic sample papers. A found gap matches when its type is in 'types' and its statement contains every keyword group (any alternative per group, case-insensitive).",
+  "gaps": [
+    {"id": "G1", "name": "GHZ states on superconducting transmon hardware",
+     "types": ["future_work", "unexplored_combination", "stated_limitation"],
+     "keywords": [["ghz"], ["transmon", "superconducting"]]},
+    {"id": "G2", "name": "GHZ preparation beyond 3 qubits",
+     "types": ["scale_limit", "stated_limitation", "future_work"],
+     "keywords": [["ghz", "entangl"], ["3 qubits", "4 qubits", "4 or more", "beyond"]]},
+    {"id": "G3", "name": "VQE ansatz on neutral atom or superconducting hardware",
+     "types": ["future_work", "unexplored_combination", "stated_limitation"],
+     "keywords": [["vqe", "variational"], ["neutral atom", "transmon", "superconducting"]]},
+    {"id": "G4", "name": "Conflicting Bell-state statistics for the same H-CNOT circuit",
+     "types": ["conflicting_results"],
+     "keywords": [["bell", "00", "h", "cx"]]},
+    {"id": "G5", "name": "Bell statistics without readout error mitigation",
+     "types": ["stated_limitation", "future_work"],
+     "keywords": [["readout"], ["mitigat"]]}
+  ]
+}

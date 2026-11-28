@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overlap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=STIX+Two+Text:ital,wght@0,400;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+/* Overlap — LLM-based research-gap identification and experiment planning for quantum literature.
+   Flow: Papers -> Gaps -> Plans (each plan verified by simulation). Separate: check a single proposal.
+   IDEA: ⟨claim|sim⟩ — what the literature claims vs. what is missing vs. what a simulation confirms.
+   Deep indigo night / lavender day; Sora UI, STIX Two italic for kets and maths. */
+:root{color-scheme:light dark;
+--bg:light-dark(#f6f5fd,#100f24);--surf:light-dark(#ffffff,#17153a);--rail:light-dark(#eceaf9,#131130);
+--ink:light-dark(#1b1838,#ecebff);--mute:light-dark(#5f5c84,#a3a1cc);--rule:light-dark(#dcd9f0,#2b2858);
+--amp:light-dark(#4b3fd6,#b9b2ff);--ampsoft:light-dark(#e4e1fc,#262259);--on:light-dark(#ffffff,#100f24);
+--pass:light-dark(#0f7a5c,#5fe0b0);--fail:light-dark(#c42d4a,#ff7d8c);--hold:light-dark(#8f5e00,#f5c76b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+/* Streamlit gives component iframes scrolling="no", so the app scrolls its own panes. */
+html,body{height:100%;overflow:hidden}
+body{display:flex;flex-direction:column;margin:0;background:var(--bg);color:var(--ink);font:300 16px/1.6 Sora,system-ui,sans-serif;overflow-x:clip}
+b,strong,h1,h2,h3{font-weight:500}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amp);outline-offset:3px;border-radius:6px}
+.ket,.math{font-family:"STIX Two Text",Georgia,serif;font-style:italic;font-weight:400}
+.top{flex:none;z-index:6;background:var(--bg);display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px max(3vw,16px);border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:34px;height:34px}
+.brand h1{margin:0;font-size:18px;line-height:1}
+.brand .ket{font-size:15px;color:var(--mute);margin-left:4px}
+.nav{display:flex;gap:0;flex:1;margin-left:8px;align-items:center;flex-wrap:wrap}
+.nav button,.nav a{border:0;background:none;padding:8px 9px;border-radius:10px;font-size:14px;color:var(--mute);text-decoration:none;min-height:40px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.nav button:hover,.nav a:hover{color:var(--ink);background:var(--rail)}
+.nav [aria-current=page]{color:var(--ink);background:var(--rail);font-weight:500}
+.nav .num{width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:12px;font-weight:500}
+.nav [aria-current=page] .num{background:var(--amp);border-color:var(--amp);color:var(--on)}
+.nav .arrow{color:var(--rule);font-size:13px}
+.nav .sep{width:1px;height:22px;background:var(--rule);margin:0 8px}
+.mode{font-size:13px;color:var(--mute)}
+.btn{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--rule);background:var(--surf);cursor:pointer;font-weight:400;display:inline-flex;align-items:center;gap:8px;transition:border-color .15s;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--amp)}
+.btn.primary{background:var(--amp);border-color:var(--amp);color:var(--on);font-weight:500}
+.btn.primary.pass{background:var(--pass);border-color:var(--pass)}
+.btn.primary.fail{background:var(--fail);border-color:var(--fail)}
+.btn.primary.hold{background:var(--hold);border-color:var(--hold)}
+.btn[disabled]{opacity:.6;cursor:progress}
+.link{border:0;background:none;color:var(--mute);cursor:pointer;padding:8px;min-height:36px;text-decoration:underline;font-size:13px;text-align:left}
+.shell{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr)}
+.rail{background:var(--rail);padding:18px 12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0}
+.pane{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.rail h2{font-size:14px;font-weight:400;color:var(--mute);margin:0 8px}
+.q{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.q button{width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:14px;padding:12px;cursor:pointer;display:grid;gap:3px}
+.q button:hover{background:var(--surf)}
+.q button[aria-current=true]{background:var(--surf);border-color:var(--rule);box-shadow:0 6px 20px -12px rgba(40,30,140,.5)}
+.q .id{font-size:13px;color:var(--mute);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.q .t{font-weight:400;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.foot{margin-top:auto;display:grid;gap:2px;padding:8px}
+.keys{font-size:13px;color:var(--mute);margin:0 0 4px}
+kbd{font:500 12px Sora,sans-serif;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surf)}
+.st{font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--mute)}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
+.st[hidden]{display:none}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.hold{color:var(--hold)}.done{color:var(--mute)}.run{color:var(--amp)}
+.chip{font-size:12px;padding:1px 9px;border-radius:999px;font-weight:500;background:color-mix(in srgb,currentColor 14%,transparent);white-space:nowrap}
+.t-stated_limitation{color:var(--hold)}.t-future_work{color:var(--amp)}.t-unexplored_combination{color:var(--pass)}.t-scale_limit{color:var(--amp)}.t-conflicting_results{color:var(--fail)}
+main{padding:clamp(20px,3vw,40px) max(3vw,16px);max-width:1120px;width:100%}
+.hero{position:relative;padding:4px 0 26px;isolation:isolate}
+.fringe{position:absolute;right:0;top:-20px;width:min(46%,420px);height:150px;z-index:-1;opacity:.4;-webkit-mask:linear-gradient(90deg,transparent,#000 40%);mask:linear-gradient(90deg,transparent,#000 40%)}
+.meta{font-size:14px;color:var(--mute);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500;padding:4px 14px 4px 10px;border-radius:999px;background:color-mix(in srgb,currentColor 12%,transparent);margin-bottom:12px}
+.tag .ket{font-size:17px}
+.hero h2{font-size:clamp(24px,3.2vw,36px);line-height:1.15;font-weight:400;margin:0;text-wrap:balance;max-width:30ch;letter-spacing:-.01em}
+.lead{font-size:17px;color:var(--mute);margin:12px 0 0;max-width:66ch}
+.hero .act{padding:18px 0 0}
+.board{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)}
+.stack-gap{display:grid;gap:clamp(16px,2.4vw,28px);margin-top:clamp(16px,2.4vw,28px)}
+.panel{background:var(--surf);border:1px solid var(--rule);border-radius:20px;padding:clamp(16px,2.2vw,26px)}
+.panel h3{font-size:15px;margin:0 0 4px}
+.panel .sub{font-size:14px;color:var(--mute);margin:0 0 16px;max-width:60ch}
+.callout{border-radius:14px;padding:14px 16px;background:color-mix(in srgb,var(--amp) 10%,transparent);margin:0 0 22px;max-width:760px}
+.disks{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:14px 10px}
+.disk{margin:0;text-align:center}
+.disk svg{width:100%;max-width:96px;aspect-ratio:1;display:block;margin:0 auto}
+.disk .shell{fill:var(--ampsoft);stroke:var(--rule)}
+.disk .fill{fill:var(--amp);transform-box:fill-box;transform-origin:center;animation:fill .9s cubic-bezier(.2,.8,.2,1) both}
+.disk .phase{stroke:var(--on);stroke-width:2;stroke-linecap:round}
+.disk .ring{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:4 3}
+.disk.off .ring{stroke:var(--fail);stroke-width:2}
+.disk figcaption{display:grid;line-height:1.3;margin-top:4px}
+.disk .ket{font-size:19px}
+.disk .num{font-weight:500;font-variant-numeric:tabular-nums}
+.disk .cl{font-size:13px;color:var(--mute)}
+.disk.off .cl{color:var(--fail);font-weight:500}
+@keyframes fill{from{transform:scale(0)}}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--mute);margin-top:18px;padding-top:14px;border-top:1px solid var(--rule)}
+.legend svg{width:16px;height:16px;vertical-align:-3px;margin-right:6px}
+.circ{margin-top:18px}
+.circ svg{width:100%;height:auto;display:block}
+.circ .wire{stroke:var(--mute);stroke-width:1.2}.circ .ghost{stroke:var(--fail);stroke-width:1.2;stroke-dasharray:5 4}
+.circ .ql{font:italic 17px "STIX Two Text",serif;fill:var(--ink)}.circ .ql.bad{fill:var(--fail)}
+.circ .gate{fill:var(--surf);stroke:var(--amp);stroke-width:1.6}.circ .gl{font:500 13px Sora,sans-serif;fill:var(--amp);text-anchor:middle}
+.circ .gate.b{stroke:var(--fail)}.circ .gl.b{fill:var(--fail)}
+.circ .cl{stroke:var(--amp);stroke-width:1.6}.circ .dot{fill:var(--amp)}.circ .tgt{fill:var(--surf);stroke:var(--amp);stroke-width:1.6}
+.circ .cb{stroke:var(--fail);stroke-width:1.8}.circ .dotb{fill:var(--fail)}.circ .tgtb{fill:var(--surf);stroke:var(--fail);stroke-width:1.8}
+.circ .meter{fill:var(--surf);stroke:var(--mute)}.circ .arc{fill:none;stroke:var(--mute);stroke-width:1.3}
+.circ .why{font:400 13px Sora,sans-serif;fill:var(--fail)}
+.errbox{margin:0;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--fail) 10%,transparent);color:var(--fail)}
+.side{display:grid;gap:clamp(16px,2.4vw,28px);align-content:start}
+.ov svg{width:100%;max-width:260px;display:block;margin:6px 0 4px}
+.ov .ax{stroke:var(--rule)}.ov .vs{stroke:var(--amp);stroke-width:3;stroke-linecap:round}.ov .vc{stroke:var(--ink);stroke-width:2;stroke-dasharray:5 4;stroke-linecap:round}
+.ov .vc.off{stroke:var(--fail)}.ov .ang{fill:color-mix(in srgb,var(--fail) 22%,transparent);stroke:var(--fail)}
+.ov text{font:italic 15px "STIX Two Text",serif;fill:var(--ink)}
+.big{font-size:clamp(34px,4vw,46px);font-weight:300;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.big+.math{display:block;font-size:17px;color:var(--mute);margin-top:4px}
+.fg{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--rule)}
+.fg:first-of-type{border-top:0}
+.fg span{color:var(--mute);font-size:14px}.fg b{font-variant-numeric:tabular-nums;text-align:right}
+.meterrow{padding:10px 0;border-top:1px solid var(--rule)}
+.meterrow .hd{display:flex;justify-content:space-between;font-size:14px}.meterrow .hd span{color:var(--mute)}
+.bar{height:8px;border-radius:99px;background:var(--ampsoft);margin:6px 0 4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--amp);border-radius:99px}
+.meterrow p{margin:0;font-size:13px;color:var(--mute)}
+.missing{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.missing li{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--hold) 10%,transparent)}
+.missing .ket{font-size:22px;color:var(--hold);line-height:1.1;flex:none;width:34px}
+.missing b{display:block}.missing span{font-size:14px;color:var(--mute)}
+.signals{display:grid;gap:18px}
+.sig h4{margin:0 0 8px;font-size:14px;font-weight:500;display:flex;gap:8px;align-items:center}
+.sig h4 .ket{font-size:19px;color:var(--amp)}
+.sig ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.sig li{padding:10px 14px;border-radius:12px;background:var(--rail);font-size:15px}
+.quote{margin:0 0 12px;padding:12px 16px;border-left:3px solid var(--amp);background:var(--rail);border-radius:0 12px 12px 0}
+.quote p{margin:0;font-size:15px}.quote cite{display:block;margin-top:6px;font-style:normal;font-size:13px;color:var(--mute)}
+.exp{padding:14px 0;border-top:1px solid var(--rule)}.exp:first-of-type{border-top:0;padding-top:0}
+.act{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:22px 0}
+.compose{background:var(--surf);border:1px solid var(--rule);border-radius:20px;padding:20px;margin-bottom:22px;display:grid;gap:10px;max-width:660px}
+.compose label{font-weight:500}
+.compose textarea{min-height:112px;padding:12px 14px;font:300 16px/1.5 Sora,sans-serif;border:1px solid var(--rule);border-radius:12px;background:var(--bg);resize:vertical}
+.compose textarea[aria-invalid=true]{border-color:var(--fail);box-shadow:0 0 0 3px color-mix(in srgb,var(--fail) 20%,transparent)}
+.err{color:var(--fail);font-size:14px;margin:0}.hint{color:var(--mute);font-size:14px;margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);margin:6px 0 24px;overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:12px 16px;min-height:46px;cursor:pointer;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected=true]{color:var(--ink);border-color:var(--amp);font-weight:500}
+.cnt{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--rail);color:var(--mute);font-weight:400}
+.cnt.f{background:color-mix(in srgb,var(--fail) 16%,transparent);color:var(--fail)}
+.cnt.h{background:color-mix(in srgb,var(--hold) 16%,transparent);color:var(--hold)}
+.dl{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr);gap:12px 24px;margin:0}
+.dl dt{color:var(--mute);font-size:14px}.dl dd{margin:0}
+.lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px}
+.lists ul,.panel ul.plain,.panel ol{margin:6px 0 0;padding-left:20px}.lists li,.panel ol li,.panel ul.plain li{margin:6px 0}
+.md{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.65 ui-monospace,Consolas,monospace;background:var(--rail);padding:20px;border-radius:14px;margin:16px 0 0}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-bottom:18px}
+th{text-align:left;font-weight:400;color:var(--mute);font-size:14px;padding:8px 12px 8px 0;border-bottom:1px solid var(--rule)}
+td{padding:11px 12px 11px 0;border-bottom:1px solid var(--rule);vertical-align:top}td.nw{white-space:nowrap}
+.cid{font-size:12px;color:var(--mute)}
+.cite{padding:12px 0;border-bottom:1px solid var(--rule)}.cite:last-child{border:0}
+.cite p{margin:4px 0 0;color:var(--mute);font-size:15px;max-width:72ch}
+.note{font-size:13px;color:var(--mute);margin-top:26px;max-width:80ch}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.sk{background:var(--ampsoft);border-radius:10px}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:14px;counter-reset:s}
+.steps li{display:flex;gap:12px;align-items:center;color:var(--mute)}
+.steps li::before{counter-increment:s;content:counter(s);flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--rule);display:grid;place-items:center;font-size:13px}
+.steps li.on{color:var(--ink);font-weight:500}.steps li.on::before{border-color:var(--amp);color:var(--amp);box-shadow:0 0 0 5px var(--ampsoft)}
+.steps li.ok{color:var(--ink)}.steps li.ok::before{content:"✓";background:var(--amp);border-color:var(--amp);color:var(--on)}
+.blank{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:center;max-width:800px;padding:clamp(24px,6vw,72px) 0}
+.blank svg{width:clamp(130px,20vw,190px)}
+.blank h2{font-size:clamp(24px,3vw,32px);font-weight:400;line-height:1.15;margin:0 0 10px}
+.blank p{color:var(--mute);margin:0 0 22px;max-width:50ch}
+.flow{list-style:none;padding:0;margin:0 0 24px;display:grid;gap:8px;font-size:15px}
+.flow li{display:flex;gap:10px;align-items:baseline}.flow b{color:var(--amp);font-weight:500;min-width:64px}
+.bloch .sph{fill:var(--ampsoft);stroke:var(--rule)}.bloch .eq{fill:none;stroke:var(--mute);stroke-dasharray:3 4}
+.bloch .vec{stroke:var(--amp);stroke-width:3;stroke-linecap:round}.bloch .tip{fill:var(--amp)}.bloch text{font:italic 16px "STIX Two Text",serif;fill:var(--mute)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 10px 10px 18px;border-radius:14px;display:flex;gap:14px;align-items:center;box-shadow:0 14px 34px -10px rgba(10,5,50,.5);max-width:calc(100% - 32px);z-index:10}
+.toast[hidden],.toast button[hidden]{display:none}
+.toast button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:36px;padding:0 8px}
+.curate{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px}.seg-b{border:1px solid var(--rule);background:var(--surf);border-radius:10px;padding:6px 12px;min-height:36px;cursor:pointer}.seg-b[aria-pressed=true]{background:var(--amp);color:var(--on);border-color:var(--amp)}
+.dims{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:8px 0 14px}.fh{font-size:14px;margin:18px 0 8px;font-weight:500}
+.stmt{padding:10px 14px;border-radius:12px;background:var(--rail);margin-bottom:8px}.stmt p{margin:0 0 6px}.stmt.unverified{opacity:.7;border-left:3px solid var(--fail)}
+.stmt-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--mute);align-items:center}.theme summary{cursor:pointer;padding:8px 0}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.in{width:100%;min-height:42px;padding:8px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--surf);font:300 15px Sora,sans-serif;color:var(--ink)}
+.in:focus{outline:2px solid var(--amp);outline-offset:1px}
+.lf{display:grid;gap:6px;margin:0 4px 8px}.lf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.form{display:grid;gap:8px;align-content:start}.form label{font-size:14px;font-weight:400}.form .lf-row label{display:block;margin-bottom:4px}
+.srcs{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;margin:6px 0;display:grid;gap:6px}.srcs legend{font-size:14px;padding:0 6px}
+.cmp{width:100%;border-collapse:collapse;font-size:14px}.cmp th{text-align:left;font-weight:500;font-size:13px;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}.cmp td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}.cmp td.num{font-variant-numeric:tabular-nums}.cmp tr.decided td{background:color-mix(in srgb,var(--amp) 8%,transparent)}.tblwrap{overflow-x:auto}
+.psec{padding:8px 0;border-top:1px solid var(--rule)}.psec:first-of-type{border-top:0}.pform{display:grid;gap:14px;max-width:900px}.pe{display:grid;gap:6px;font-size:14px}.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}.err{color:var(--fail)}
+.runsteps{list-style:none;padding:0;margin:0;display:grid;gap:8px}.runsteps li{display:flex;gap:8px;align-items:center;font-size:14px}.pick{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--rule)}.pick input{margin-top:5px;accent-color:var(--amp)}
+.ovgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}.ovcard{display:grid;gap:6px;text-align:left;cursor:pointer;font:inherit;color:inherit}.ovcard:hover{border-color:var(--amp)}
+.pvlegend{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}.pv{font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.pv-quote{color:var(--pass);background:color-mix(in srgb,var(--pass) 14%,transparent)}.pv-generated{color:var(--hold);background:color-mix(in srgb,var(--hold) 14%,transparent)}
+.pv-computed{color:var(--amp);background:color-mix(in srgb,var(--amp) 14%,transparent)}.pv-inference{color:#a78bfa;background:color-mix(in srgb,#a78bfa 14%,transparent)}
+.pv-researcher{color:#2dd4bf;background:color-mix(in srgb,#2dd4bf 14%,transparent)}.pv-metadata{color:var(--mute);background:color-mix(in srgb,var(--mute) 14%,transparent)}
+.pvi{margin:0 0 8px;padding:6px 0 6px 12px;border-left:3px solid var(--rule)}.pvi-quote{border-left-color:var(--pass)}.pvi-generated{border-left:3px dashed var(--hold);font-style:italic}
+.pvi-researcher{border-left-color:#2dd4bf}.pvi-inference{border-left-color:#a78bfa}
+.rgrid{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}.pvtoc{position:sticky;top:0;display:grid;gap:2px;font-size:13px}.pvtoc a{color:var(--mute);text-decoration:none;padding:4px 6px;border-radius:8px}.pvtoc a:hover{background:var(--rail);color:var(--ink)}
+.rbody{display:grid;gap:14px}.rsec h3{margin-top:0}.refs{padding-left:24px;font-size:14px}.refs li{margin:6px 0}
+@media(max-width:900px){.rgrid{grid-template-columns:1fr}.pvtoc{position:static}}
+.wts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.wts label{font-size:13px;display:grid;gap:4px}
+.chk{display:flex;gap:8px;align-items:center;min-height:32px}.chk input{width:18px;height:18px;accent-color:var(--amp)}
+.hold.chip,.chip.hold{color:var(--hold)}.pass.chip,.chip.pass{color:var(--pass)}
+a{color:var(--amp)}
+@media(max-width:1100px){.mode{display:none}}
+@media(max-width:760px){.nav{order:9;flex-basis:100%;margin:0}.board{grid-template-columns:1fr}.fringe{width:70%}.dl{grid-template-columns:1fr;gap:2px}.dl dd{margin-bottom:10px}}
+@media(max-width:900px){.shell{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.rail{padding:12px;overflow:visible}.foot{display:none}
+.q{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:6px;padding-bottom:4px}.q li{flex:0 0 228px;scroll-snap-align:start}}
+@media(max-width:600px){.blank{grid-template-columns:1fr}.disks{grid-template-columns:repeat(auto-fill,minmax(76px,1fr))}
+table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--rule)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:6.5em}.stack td::before{content:attr(data-l);float:inline-start;width:6em;margin-inline-start:-6.5em;color:var(--mute);font-size:13px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true" class="bloch"><circle cx="20" cy="20" r="17" class="sph"/><ellipse cx="20" cy="20" rx="17" ry="5.5" class="eq"/><line x1="20" y1="20" x2="29" y2="8" class="vec"/><circle cx="29" cy="8" r="3" class="tip"/></svg>
+    <h1>Overlap</h1><span class="ket" aria-label="claim overlap with simulation">⟨claim|sim⟩</span>
+  </div>
+  <nav class="nav" id="nav" aria-label="Workflow"></nav>
+  <label class="btn" for="file" id="uplabel">Upload papers</label>
+  <input class="vh" type="file" id="file" accept=".pdf,.docx,.txt" multiple>
+</header>
+<div class="shell">
+  <nav class="rail" aria-label="List"><h2 id="railh"></h2><div id="railf"></div><ul class="q" id="q"></ul><div class="foot" id="foot"></div></nav>
+  <div class="pane" id="pane"><main id="main" aria-live="polite"></main></div>
+</div>
+<div class="toast" id="toast" hidden><span id="tmsg"></span><button id="undo">Undo</button></div>
+
+<script>
+{
+/* ---------- Streamlit component protocol (no build step) ---------- */
+const send=(type,extra)=>window.parent.postMessage(Object.assign({isStreamlitMessage:true,type},extra),'*');
+const emit=ev=>send('streamlit:setComponentValue',{value:Object.assign({eid:Math.random().toString(36).slice(2)+Date.now()},ev),dataType:'json'});
+
+const SECS={literature:{n:1,label:'Literature',rail:'Literature in the database'},papers:{n:2,label:'Papers',rail:'Papers in the library'},
+  gaps:{n:3,label:'Gaps',rail:'Gaps, most promising first'},plans:{n:4,label:'Plans',rail:'Experiment plans'},
+  proposals:{label:'Check a proposal',rail:'Proposals to check'},runs:{label:'Guided run',rail:'Research runs'},reports:{label:'Reports',rail:'Overview and reports'}};
+const AVAIL={full_text:['pass','Full text'],abstract:['t-future_work','Abstract'],metadata_only:['hold','Metadata only']};
+const SRC_LABEL={openalex:'OpenAlex',arxiv:'arXiv',crossref:'Crossref',semantic_scholar:'Semantic Scholar'};
+const V={pass:['pass','Claims hold','|✓⟩'],fail:['fail',"Claims don't hold",'|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
+const VP={pass:['pass','Plan verified','|✓⟩'],fail:['fail','Plan fails verification','|✗⟩'],hold:['hold',"Can't verify yet",'|?⟩']};
+const DEC={pass:['Send to panel','Sent to panel'],fail:['Return to author','Returned to author'],hold:['Request details','Details requested']};
+const CS={pass:['pass','Pass'],fail:['fail','Fail'],hold:['hold','Inconclusive'],not:['done','Not run']};
+const TABS=[['verdict','Verdict'],['extracted','What we extracted'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
+const PTABS=[['plan','Plan'],['verdict','Verdict'],['checks','Checks'],['evidence','Evidence'],['report','Report']];
+const STEPS={analysis:['Reading the abstract or full text','Asking the model for evidence-backed statements','Checking every quoted passage against the paper','Adding the paper’s own sentences','Tagging research dimensions'],
+  corpus:['Loading analysed papers (excluded ones left out)','Grouping papers into themes','Building the method × platform coverage','Finding statements several papers share'],
+  literature:['Querying OpenAlex','Querying arXiv (3 s between requests, as arXiv asks)','Querying Crossref','Merging duplicates across sources','Saving to the research database'],
+  papers:['Reading the document','Finding limitations and future work','Extracting experiments','Indexing into the library'],
+  gaps:['Reading gap signals in each paper','Mapping circuits against hardware platforms','Comparing reported results','Scoring novelty against the library','Ranking gaps'],
+  corpus_gaps:['Reading verified limitations, open problems and future work','Merging statements several papers share','Finding untried method × platform and method × noise pairs','Rewriting gaps as research questions (labelled)','Saving candidates'],
+  novelty:['Building queries from the gap’s dimensions and synonyms','Searching OpenAlex and Crossref','Searching arXiv (3 s between requests)','Following works that cite the supporting papers','Comparing the closest papers dimension by dimension','Classifying by fixed rules and recording coverage'],
+  report:['Gathering the plan, its gap and its novelty investigation','Summarising the corpus and its themes','Adding verification and simulation results','Labelling every statement by provenance','Writing Markdown, JSON and PDF'],
+  run_start:['Collecting literature (if you asked)','Analysing papers','Finding and ranking gaps','Saving the run; it will wait for your gap choice'],
+  run_gap:['Checking novelty against OpenAlex, arXiv and Crossref','Re-querying with a wider search if coverage is low (at most twice)','Drafting a grounded plan','Saving the run; it will wait for your review'],
+  run_plan:['Reading your decision on the plan','Verifying by simulation if you approved it','Revising once after a failure (needs your approval)','Writing the run summary'],
+  verify:['Converting the approved plan into a circuit specification','Checking structure, qubits and gates','Simulating the ideal statevector','Comparing predictions, TVD and state fidelity','Simulating the stated noise (exact density matrix)','Recording the run against this revision'],
+  proposal:['Loading the gap, its evidence and its novelty investigation','Classifying feasibility by rule','Asking the model for a grounded proposal','Checking every quote against the sources','Listing what is still missing'],
+  plans:['Reading the gap and its evidence','Choosing a circuit and prediction','Writing the method and metrics','Simulating and auditing the plan','Revising once if verification fails'],
+  proposals:['Reading the proposal','Checking the literature','Simulating the circuit','Auditing against the rules','Writing the report']};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let D={literature:[],papers:[],gaps:[],plans:[],proposals:[],runs:[],reports:[]},sec='literature',sel={},pending={papers:[],proposals:[]},busy=null,meta={},lastSeq=null,
+  tab='verdict',ptab='plan',compose=null,err='',drafts={},localDec={},running={},last=null,
+  litMode='collect',railSec=null,
+  litForm={topic:'noise_mitigation',query:'',year_from:'',year_to:'',limit:'25',sources:['openalex','arxiv','crossref'],doi:''},
+  litFilter={text:'',source:'',availability:'',year_from:'',year_to:''};
+function litMatches(p){
+  const f=litFilter,t=f.text.trim().toLowerCase();
+  if(t&&!(`${p.title} ${p.abstract||''} ${(p.authors||[]).join(' ')}`.toLowerCase().includes(t)))return false;
+  if(f.source&&!p.sources.some(s=>s.name===f.source))return false;
+  if(f.availability&&p.availability!==f.availability)return false;
+  if(f.year_from&&!(p.year>=+f.year_from))return false;
+  if(f.year_to&&!(p.year<=+f.year_to))return false;
+  return true;}
+const list=()=>sec==='literature'?D.literature.filter(litMatches):[...(pending[sec]||[]),...D[sec]];
+const cur=()=>list().find(x=>x.id===sel[sec]);
+
+const fringe=(()=>{let r='';for(let i=0;i<140;i++){const o=Math.cos(i*.16)**2*Math.exp(-(((i-80)/40)**2))*.5;r+=`<rect x="${i*3}" y="0" width="3.2" height="150" fill="var(--amp)" opacity="${o.toFixed(3)}"/>`}
+  return `<svg class="fringe" viewBox="0 0 420 150" preserveAspectRatio="none" aria-hidden="true">${r}</svg>`})();
+const bloch=`<svg viewBox="0 0 120 130" class="bloch" aria-hidden="true"><circle cx="60" cy="62" r="52" class="sph"/><ellipse cx="60" cy="62" rx="52" ry="16" class="eq"/><line x1="60" y1="62" x2="60" y2="16" class="vec"/><circle cx="60" cy="14" r="5" class="tip"/><text x="68" y="12">|0⟩</text><text x="68" y="126">|1⟩</text></svg>`;
+
+/* ---------------------------------------------------------------- chrome */
+function renderNav(){
+  const counts={literature:D.literature.length,papers:D.papers.filter(p=>p.state!=='bad').length,gaps:D.gaps.length,plans:D.plans.length};
+  const step=k=>`<button data-sec="${k}" ${sec===k?'aria-current="page"':''}><span class="num">${SECS[k].n}</span>${SECS[k].label}${counts[k]?`<span class="cnt">${counts[k]}</span>`:''}</button>`;
+  const arrow='<span class="arrow" aria-hidden="true">→</span>';
+  $('#nav').innerHTML=`${step('literature')}${arrow}${step('papers')}${arrow}${step('gaps')}${arrow}${step('plans')}
+    <span class="sep" aria-hidden="true"></span><button data-sec="runs" ${sec==='runs'?'aria-current="page"':''}>Guided run${D.runs.some(r=>r.status==='waiting')?'<span class="cnt">!</span>':''}</button>
+    <button data-sec="reports" ${sec==='reports'?'aria-current="page"':''}>Reports</button>
+    <button data-sec="proposals" ${sec==='proposals'?'aria-current="page"':''}>Check proposal</button>
+    <a id="dash" href="/dashboard" title="The original full dashboard">Dashboard</a>`;
+  const up=$('#uplabel');up.hidden=!(sec==='papers'||sec==='proposals');up.textContent=sec==='proposals'?'Upload proposal':'Upload papers';
+  $('#file').multiple=sec==='papers';}
+const decided=p=>p.id in localDec?localDec[p.id]:!!p.dec;
+function pstatus(p){
+  if(p.state==='run'||running[p.id])return['run',sec==='papers'?'Analysing…':'Verifying…'];
+  if(p.state==='bad')return['fail','Couldn’t read file'];
+  if(sec==='plans')return VP[p.v];
+  if(decided(p))return['done',DEC[p.v][1]];
+  return V[p.v];}
+function row(p){
+  if(sec==='literature'){const [c,l]=AVAIL[p.availability];
+    return `<span class="id">${esc(p.year||'n.d.')}<span class="chip ${c}">${l}</span>${p.analysed?'<span class="chip pass">Analysed</span>':''}${p.curation==='excluded'?'<span class="chip fail">Excluded</span>':p.curation==='included'?'<span class="chip pass">Included</span>':''}</span><span class="t" ${p.curation==='excluded'?'style="opacity:.55"':''}>${esc(p.title)}</span>
+      <span class="st done">${esc(p.sources.map(s=>SRC_LABEL[s.name]||s.name).join(', '))}</span>`}
+  if(sec==='papers'){const [c,t]=p.state?pstatus(p):['pass',`${p.signals} gap signal${p.signals===1?'':'s'}`];
+    return `<span class="id">${esc(p.id)}${p.synthetic?'<span class="chip t-future_work">Synthetic</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${esc(t)}</span>`}
+  if(sec==='gaps'&&p.kind==='corpus')return corpusGapRow(p);
+  if(sec==='gaps')return `<span class="id">${esc(p.id)}<span class="chip t-${p.type}">${esc(p.type_label)}</span></span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.plan_id?'pass':'done'}">${p.plan_id?'Planned':'Priority '+p.priority.toFixed(2)}</span>`;
+  if(sec==='runs')return runRow(p);
+  if(sec==='reports')return reportRow(p);
+  if(sec==='plans'&&p.kind==='proposal')return proposalRow(p);
+  const [c,t]=pstatus(p);
+  return `<span class="id">${esc(p.id)}${p.revision?'<span class="chip t-future_work">Revised</span>':''}</span><span class="t">${esc(p.title)}</span><span class="st ${c}">${t}</span>`;}
+function renderRailFilters(){
+  // Rendered only when the section changes, so typing in a filter never loses focus.
+  if(railSec===sec)return;railSec=sec;
+  const f=litFilter,sel_=(v,cur)=>v===cur?'selected':'';
+  $('#railf').innerHTML=sec!=='literature'?'':`<div class="lf">
+    <label class="vh" for="lf-text">Filter papers</label><input id="lf-text" class="in" type="search" placeholder="Filter by title, abstract, author" value="${esc(f.text)}">
+    <div class="lf-row"><label class="vh" for="lf-avail">Availability</label><select id="lf-avail" class="in"><option value="">Availability</option>
+      ${Object.entries(AVAIL).map(([k,[,l]])=>`<option value="${k}" ${sel_(k,f.availability)}>${l}</option>`).join('')}</select>
+      <label class="vh" for="lf-src">Source</label><select id="lf-src" class="in"><option value="">Source</option>
+      ${Object.entries(SRC_LABEL).map(([k,l])=>`<option value="${k}" ${sel_(k,f.source)}>${l}</option>`).join('')}</select></div>
+    <div class="lf-row"><label class="vh" for="lf-y1">From year</label><input id="lf-y1" class="in" inputmode="numeric" placeholder="From year" value="${esc(f.year_from)}">
+      <label class="vh" for="lf-y2">To year</label><input id="lf-y2" class="in" inputmode="numeric" placeholder="To year" value="${esc(f.year_to)}"></div></div>`;}
+function renderList(){
+  const l=list();
+  $('#q').innerHTML=l.length?l.map(p=>`<li><button data-id="${esc(p.id)}" aria-current="${p.id===sel[sec]}">${row(p)}</button></li>`).join('')
+    :`<li class="hint" style="padding:8px">${sec==='literature'?(D.literature.length?'No papers match the filters.':'Nothing collected yet.'):sec==='papers'?'No papers yet.':sec==='gaps'?'No gaps found yet.':sec==='plans'?'No plans yet.':'The queue is empty.'}</li>`;
+  if(sec==='literature')$('#railh').textContent=`${SECS[sec].rail} (${l.length}${l.length!==D.literature.length?` of ${D.literature.length}`:''})`;}
+function renderRail(){
+  $('#railh').textContent=SECS[sec].rail;renderRailFilters();renderList();
+  const foot={literature:`<button class="link" data-litmode="collect">Collect more literature</button>`,
+    papers:`<button class="link" data-act="sample_papers">Load sample papers</button><button class="link" data-act="clear_papers">Clear library</button>`,
+    gaps:`<button class="link" data-act="corpus_gaps">Find gaps in the corpus</button>${D.papers.length?`<button class="link" data-act="find_gaps">Find gaps in uploaded papers</button>`:''}`,
+    plans:D.plans.length?`<button class="link" id="agenda2">Download research agenda</button>`:'',
+    runs:`<button class="link" data-act="run_new">Start a run</button>`,
+    reports:'',
+    proposals:`<button class="link" data-act="reload">Reload benchmark cases</button><button class="link" data-act="clear">Clear queue</button>`}[sec];
+  $('#foot').innerHTML=`<p class="keys"><kbd>J</kbd> <kbd>K</kbd> move through the list</p>${foot}<p class="keys" style="margin-top:8px">${esc(meta.mode||'')}</p>`;}
+
+/* --------------------------------------------------------- shared visuals */
+function disks(p){
+  const R=34;
+  return Object.keys(p.sim).sort().map(k=>{const s=p.sim[k],c=p.claim[k]??0,off=(k in p.claim)&&Math.abs(c-s)>p.tol,rs=Math.sqrt(s)*R,rc=Math.sqrt(c)*R,ph=(p.phase||{})[k]||0;
+    const L=Math.max(0,rs-3),x2=40-L*Math.sin(ph),y2=40-L*Math.cos(ph);
+    return `<figure class="disk ${off?'off':''}"><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="${R}" class="shell"/>
+    ${s>1e-9?`<circle cx="40" cy="40" r="${rs.toFixed(2)}" class="fill"/><line x1="40" y1="40" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" class="phase"/>`:''}
+    ${c>0?`<circle cx="40" cy="40" r="${rc.toFixed(2)}" class="ring"/>`:''}</svg>
+    <figcaption><span class="ket">|${esc(k)}⟩</span><span class="num">${s.toFixed(2)}</span><span class="cl">${k in p.claim?`${sec==='plans'?'predicted':'claimed'} ${c.toFixed(2)}`:'&nbsp;'}</span></figcaption></figure>`}).join('');}
+const sub=i=>`q<tspan dy="4" font-size="12">${i}</tspan>`;
+function circuit(p){
+  const gs=p.gates,n=p.n||1,hi=Math.max(n-1,...gs.flatMap(g=>g[1])),rows=hi+1;
+  const W=Math.max(300,96+gs.length*62+56,p.bad!=null&&gs[p.bad]&&gs[p.bad][1].some(q=>q>=n)?86+p.bad*62+200:0),H=rows*46+(hi>=n?22:8),y=i=>24+i*46;let s='';
+  for(let i=0;i<rows;i++){const g=i>=n;s+=`<line x1="40" x2="${W-(g?60:40)}" y1="${y(i)}" y2="${y(i)}" class="${g?'ghost':'wire'}"/><text x="6" y="${y(i)+5}" class="ql ${g?'bad':''}">${sub(i)}</text>`}
+  gs.forEach(([g,q],k)=>{const x=86+k*62,bad=k===p.bad;
+    if(q.length===2&&['CX','CNOT','CZ','SWAP'].includes(g)){const [a,b]=q,L=bad?'cb':'cl';
+      if(g==='SWAP')s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)}" class="${L}"/>${[a,b].map(t=>`<path d="M${x-7} ${y(t)-7}l14 14M${x+7} ${y(t)-7}l-14 14" class="${L}"/>`).join('')}`;
+      else if(g==='CZ')s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)}" class="${L}"/><circle cx="${x}" cy="${y(a)}" r="5" class="${bad?'dotb':'dot'}"/><circle cx="${x}" cy="${y(b)}" r="5" class="${bad?'dotb':'dot'}"/>`;
+      else s+=`<line x1="${x}" x2="${x}" y1="${y(a)}" y2="${y(b)+12*Math.sign(b-a)}" class="${L}"/><circle cx="${x}" cy="${y(a)}" r="5" class="${bad?'dotb':'dot'}"/><circle cx="${x}" cy="${y(b)}" r="12" class="${bad?'tgtb':'tgt'}"/><line x1="${x-12}" x2="${x+12}" y1="${y(b)}" y2="${y(b)}" class="${L}"/><line x1="${x}" x2="${x}" y1="${y(b)-12}" y2="${y(b)+12}" class="${L}"/>`;
+      if(bad&&b>=n)s+=`<text x="${x+22}" y="${y(b)+22}" class="why">q${b} isn’t in the register</text>`;}
+    else{const a=q[0]??0,lab=g.length>3?g.slice(0,3):g;s+=`<rect x="${x-17}" y="${y(a)-16}" width="34" height="32" rx="7" class="gate ${bad?'b':''}"/><text x="${x}" y="${y(a)+5}" class="gl ${bad?'b':''}">${esc(lab)}</text>`}});
+  for(let i=0;i<n;i++){const x=W-40;s+=`<rect x="${x-15}" y="${y(i)-14}" width="30" height="28" rx="6" class="meter"/><path d="M${x-9} ${y(i)+6}a9 9 0 0 1 18 0" class="arc"/><line x1="${x}" y1="${y(i)+6}" x2="${x+6}" y2="${y(i)-6}" class="arc"/>`}
+  return `<svg viewBox="0 0 ${W} ${H}" style="max-width:${Math.round(W*1.3)}px" role="img" aria-label="Circuit: ${esc(gs.map(g=>g[0]+' '+g[1].join(' ')).join(', '))}">${s}</svg>`;}
+function overlap(p){
+  const th=Math.acos(Math.sqrt(Math.min(1,p.fid))),a0=62*Math.PI/180,L=110,O=[24,126];
+  const pt=a=>[O[0]+L*Math.cos(a),O[1]-L*Math.sin(a)],S=pt(a0),C=pt(a0-th),r=42,A1=[O[0]+r*Math.cos(a0),O[1]-r*Math.sin(a0)],A2=[O[0]+r*Math.cos(a0-th),O[1]-r*Math.sin(a0-th)];
+  const same=th<.01,deg=(th*180/Math.PI).toFixed(1),lab=sec==='plans'?'pred':'claim';
+  return `<svg viewBox="0 0 220 140" role="img" aria-label="Angle between ${lab} and simulated states: ${deg} degrees">
+   <line x1="${O[0]}" y1="${O[1]}" x2="210" y2="${O[1]}" class="ax"/><line x1="${O[0]}" y1="${O[1]}" x2="${O[0]}" y2="6" class="ax"/>
+   ${same?'':`<path d="M${O[0]} ${O[1]}L${A1[0]} ${A1[1]}A${r} ${r} 0 0 1 ${A2[0]} ${A2[1]}Z" class="ang"/>`}
+   <line x1="${O[0]}" y1="${O[1]}" x2="${S[0]}" y2="${S[1]}" class="vs"/>
+   <line x1="${O[0]}" y1="${O[1]}" x2="${C[0]}" y2="${C[1]}" class="vc ${same?'':'off'}"/>
+   ${same?`<text x="${S[0]+8}" y="${S[1]+4}">|${lab}⟩ = |sim⟩</text>`:`<text x="${S[0]-44}" y="${S[1]+6}">|sim⟩</text><text x="${C[0]+8}" y="${C[1]+6}">|${lab}⟩</text><text x="${O[0]+r+14}" y="${O[1]-10}" style="fill:var(--fail);font-style:normal;font-size:13px">θ ${deg}°</text>`}</svg>`;}
+const legend=p=>`<div class="legend"><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--amp)"/></svg>Simulated</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--ink)" stroke-dasharray="3 2"/></svg>${sec==='plans'?'Predicted':'Claimed'}</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--fail)" stroke-width="2" stroke-dasharray="3 2"/></svg>Outside ±${p.tol} tolerance</span><span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--amp)"/><line x1="8" y1="8" x2="8" y2="2" stroke="var(--on)" stroke-width="2"/></svg>Phase</span></div>`;
+function picture(p){
+  if(p.sim)return `<div class="panel"><h3>Amplitudes by basis state</h3><p class="sub">Filled area is the simulated probability. The dashed ring is what ${sec==='plans'?'the plan predicts':'the author claims'}.</p>
+   <div class="disks">${disks(p)}</div>${legend(p)}${p.gates?`<div class="circ">${circuit(p)}</div>`:''}</div>`;
+  if(p.v==='hold'&&p.missing.length)return `<div class="panel"><h3>Missing</h3><p class="sub">Verification needs these before it can simulate anything.</p><ul class="missing">${p.missing.map(([s,a,b])=>`<li><span class="ket">${esc(s)}</span><div><b>${esc(a)}</b><span>${esc(b)}</span></div></li>`).join('')}</ul></div>`;
+  const ck=p.checks.find(c=>c[2]==='fail'||c[2]==='hold');
+  return `<div class="panel"><h3>Circuit as submitted</h3><p class="sub">The circuit failed its structural check, so it wasn’t simulated.</p>
+   ${p.gates?`<div class="circ">${circuit(p)}</div>`:''}${ck?`<p class="errbox" style="margin-top:16px">${esc(ck[3])}</p>`:''}</div>`;}
+function side(p){
+  const c=k=>p.checks.filter(x=>x[2]===k).length,pass=c('pass'),fail=c('fail'),not=c('not'),hold=p.checks.length-pass-fail-not;
+  const rest=[fail&&`${fail} failed`,hold&&`${hold} inconclusive`,not&&`${not} not run`].filter(Boolean).join(', ');
+  const lab=sec==='plans'?'pred':'claim';
+  const ov=p.fid!=null?`<div class="panel ov"><h3>State overlap</h3><div class="big ${p.fid<.999?'fail':''}">${p.fid.toFixed(3)}</div><span class="math">fidelity |⟨${lab}|sim⟩|²</span>${overlap(p)}
+    <p class="hint">${p.fid<.999?'The predicted state points away from what the circuit produces.':'The predicted state and the simulated state coincide.'} Computed from the outcome probabilities.</p></div>`:'';
+  return `<div class="side">${ov}<div class="panel">
+    <div class="fg"><span>Total variation distance</span><b class="${p.tvd!=null&&p.tvd>p.tol?'fail':''}">${p.tvd!=null?p.tvd.toFixed(3)+' / '+p.tol:'Not simulated'}</b></div>
+    <div class="fg"><span>Checks passed</span><b>${pass} of ${p.checks.length}</b></div>
+    ${rest?`<div class="fg"><span>Other checks</span><b style="font-weight:400">${rest}</b></div>`:''}
+    <div class="fg"><span>Qubits</span><b>${p.n??'Not stated'}</b></div></div></div>`;}
+const litClass=s=>/support/i.test(s)?'pass':/contradict/i.test(s)?'fail':'done';
+const compClass=s=>/^verified/i.test(s)?'pass':/contradict/i.test(s)?'fail':'done';
+function extracted(p){
+  const x=p.spec||{fields:[],lists:[]};
+  return `<p class="hint" style="margin-bottom:16px">What the system read from the document. If something looks wrong, fix it in the full dashboard and re-verify.</p>
+  <div class="panel"><dl class="dl">${x.fields.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>
+  <div class="lists">${x.lists.map(([k,arr])=>`<div class="panel"><h3>${esc(k)}</h3>${arr.length?`<ul>${arr.map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`:'<p class="hint" style="margin-top:6px">None stated.</p>'}</div>`).join('')}</div>`;}
+const checksTab=p=>`<p class="hint" style="margin-bottom:12px">Each rule the ${sec==='plans'?'plan':'proposal'} was audited against, and what it found.</p><table class="stack"><thead><tr><th>Check</th><th>Result</th><th>What it found</th></tr></thead><tbody>
+  ${p.checks.map(([id,n,s,d])=>`<tr><td>${esc(n)}<div class="cid">${esc(id)}</div></td><td class="nw"><span class="st ${CS[s][0]}">${CS[s][1]}</span></td><td>${esc(d)}</td></tr>`).join('')}</tbody></table>`;
+const evidenceTab=p=>`<h3 style="font-size:16px;margin:0 0 4px">Claims</h3><p class="hint" style="margin-bottom:10px">Each claim, checked against the literature and against the simulation.</p>
+  ${p.claims.length?`<table class="stack"><thead><tr><th>Claim</th><th>Literature</th><th>Simulation</th></tr></thead><tbody>
+  ${p.claims.map(([t,l,s])=>`<tr><td>${esc(t)}</td><td class="nw"><span class="st ${litClass(l)}">${esc(l)}</span></td><td><span class="st ${compClass(s)}">${esc(s)}</span></td></tr>`).join('')}</tbody></table>`:'<p class="hint">No discrete claims were extracted.</p>'}
+  <h3 style="font-size:16px;margin:28px 0 4px">Literature found</h3><p class="hint" style="margin-bottom:6px">Closest passages in the library.</p>
+  ${p.cites.length?p.cites.map(([s,pg,sc,t])=>`<div class="cite"><b>${esc(s)}</b>${pg?`<span class="hint">, p. ${esc(pg)}</span>`:''} <span class="hint">match ${esc(sc)}</span><p>${esc(t)}</p></div>`).join(''):'<p class="hint">No matching passages in the library.</p>'}`;
+const reportTab=p=>`<div class="row"><button class="btn primary" id="dlmd">Download Markdown report</button><button class="btn" id="copy">Copy report JSON</button><button class="btn" id="rerun">Re-run verification</button></div><pre class="md">${esc(p.md)}</pre>`;
+function tabBar(defs,active,counts){
+  return `<div class="tabs" role="tablist" aria-label="Sections">${defs.map(([k,l])=>{const n=counts[k];return `<button role="tab" id="t-${k}" data-tab="${k}" aria-controls="tp" aria-selected="${active===k}" tabindex="${active===k?0:-1}">${l}${n?`<span class="cnt ${n[1]}">${esc(n[0])}</span>`:''}</button>`}).join('')}</div>`;}
+function checkCounts(p){
+  const failN=p.checks.filter(x=>x[2]==='fail').length,holdN=p.checks.filter(x=>x[2]==='hold').length;
+  return {checks:failN?[`${failN} failed`,'f']:holdN?[`${holdN} unclear`,'h']:[`${p.checks.length}`,''],evidence:[`${p.claims.length+p.cites.length}`,'']};}
+
+/* ---------------------------------------------------------- Papers view */
+function paperView(p){
+  const sig=(ket,label,arr,hint)=>`<div class="sig"><h4><span class="ket">${ket}</span>${label}<span class="cnt">${arr.length}</span></h4>${arr.length?`<ul>${arr.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:`<p class="hint">${hint}</p>`}</div>`;
+  const gapsBtn=D.gaps.length?`<button class="btn" data-sec="gaps">View ${D.gaps.length} gaps</button><button class="btn" data-act="find_gaps">Find gaps again</button>`:`<button class="btn primary" data-act="find_gaps">Find research gaps</button>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span><span>${esc(p.analysed_by)}</span>${p.synthetic?'<span class="chip t-future_work">Synthetic sample paper</span>':''}</div>
+  <h2>${esc(p.title)}</h2><p class="lead">${esc(p.objective)}</p>
+  <div class="act">${gapsBtn}<button class="btn" data-act="remove_paper">Remove paper</button></div></section>
+  <section class="board"><div class="panel"><h3>Gap signals</h3><p class="sub">Sentences where the authors say what they didn’t do. The gap finder starts here.</p>
+    <div class="signals">${sig('−','Limitations',p.limitations,'None stated.')}${sig('→','Future work',p.future_work,'None stated.')}${sig('?','Open questions',p.open_questions,'None stated.')}</div></div>
+   <div class="side"><div class="panel"><h3>At a glance</h3>
+    <div class="fg"><span>Platforms</span><b style="font-weight:400">${esc(p.systems.join(', ')||'Not identified')}</b></div>
+    <div class="fg"><span>Methods</span><b style="font-weight:400">${esc(p.frameworks.join(', ')||'Not identified')}</b></div>
+    <div class="fg"><span>Experiments</span><b>${p.experiments.length}</b></div>
+    ${p.doi?`<div class="fg"><span>DOI</span><b style="font-weight:400">${esc(p.doi)}</b></div>`:''}</div>
+    ${p.contributions.length?`<div class="panel"><h3>What it reports</h3><ul class="plain">${p.contributions.slice(0,4).map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`:''}</div></section>
+  ${p.experiments.length?`<div class="stack-gap"><div class="panel"><h3>Experiments in the paper</h3>${p.experiments.map(e=>`<div class="exp"><b>${esc(e.title)}</b>
+    <p class="hint">${esc([e.system,e.n?`${e.n} qubits`:null].filter(Boolean).join(', '))}${e.outcomes?`. Reported ${esc(e.outcomes)}`:''}</p>
+    ${e.gates&&e.n?`<div class="circ">${circuit({gates:e.gates,n:e.n,bad:null})}</div>`:''}${e.findings?`<p class="hint" style="margin-top:8px">${esc(e.findings)}</p>`:''}</div>`).join('')}</div></div>`:''}
+  ${p.claims.length?`<div class="stack-gap"><div class="panel"><h3>Claims</h3><ul class="plain">${p.claims.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div></div>`:''}`;}
+
+/* ------------------------------------------------------------ Gaps view */
+function gapView(g){
+  if(g.kind==='corpus')return corpusGapView(g);
+  const meter=(label,v,why)=>`<div class="meterrow"><div class="hd"><span>${label}</span><b>${v.toFixed(2)}</b></div><div class="bar"><i style="width:${Math.round(v*100)}%"></i></div><p>${why}</p></div>`;
+  const act=g.plan_id?`<button class="btn primary" data-goto="plans:${esc(g.plan_id)}">Open ${esc(g.plan_id)}</button><button class="btn" data-act="plan_gap">Plan another experiment</button>`
+    :`<button class="btn primary" data-act="plan_gap">Plan an experiment</button>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(g.id)}</span><span class="chip t-${g.type}">${esc(g.type_label)}</span><span>Supported by ${g.papers} paper${g.papers===1?'':'s'}</span></div>
+  <h2>${esc(g.title)}</h2><p class="lead">${esc(g.statement)}</p><div class="act">${act}</div></section>
+  <section class="board"><div class="panel"><h3>Evidence from the literature</h3><p class="sub">Every gap is backed by what the papers actually say.</p>
+    ${g.evidence.map(e=>`<blockquote class="quote"><p>${esc(e.quote)}</p><cite>${esc(e.paper)}${e.page?`, p. ${esc(e.page)}`:''}</cite></blockquote>`).join('')}</div>
+   <div class="side"><div class="panel"><h3>Why it ranks here</h3><div class="big">${g.priority.toFixed(2)}</div><span class="math" style="display:block;color:var(--mute);margin:4px 0 8px">priority</span>
+    ${meter('Novelty',g.novelty,'How little of the wider library already covers this.')}
+    ${meter('Evidence',g.evidence_strength,'How many papers and quotes point to it.')}
+    ${meter('Feasibility',g.feasibility,g.testable?'Can be tested with a small circuit on the simulator.':'Needs more than a small simulated circuit.')}</div>
+    <div class="panel"><div class="fg"><span>Circuit family</span><b style="font-weight:400">${esc(g.family||'Not specific')}</b></div>
+     <div class="fg"><span>Target platform</span><b style="font-weight:400">${esc(g.target||'Same as source')}</b></div>
+     <div class="fg"><span>Testable here</span><b style="font-weight:400">${g.testable?'Yes':'No'}</b></div></div></div></section>`;}
+
+/* --------------------------------------------- Corpus gaps (Phase 4) */
+const CLS={already_investigated:['fail','Already investigated'],partially_investigated:['hold','Partially investigated'],
+  conflicting_findings:['hold','Conflicting findings'],potentially_unexplored:['pass','Potentially unexplored'],
+  insufficient_coverage:['done','Insufficient search coverage']};
+const DIMRES={same:['fail','same'],different:['pass','different'],not_stated:['done','not stated']};
+const DSRC={statement:'from the gap’s own text',paper_context:'from the source paper',corpus:'from corpus coverage',llm:'model interpretation'};
+const QKIND={exact:'Gap’s own words',statement_context:'Own words + main phenomenon',concepts:'Concepts',synonym:'Synonyms (ontology)',method:'Method-focused',condition:'Condition-focused',llm_alternative:'Model-proposed wording'};
+function corpusGapRow(p){
+  const [c,l]=p.classification?CLS[p.classification]:['done','Not checked'];
+  return `<span class="id">${esc(p.id)}<span class="chip t-${p.origin==='unexplored_combination'?'unexplored_combination':p.origin==='future_work'||p.origin==='unresolved_problem'?'future_work':'stated_limitation'}">${esc(p.origin_label)}</span></span>
+    <span class="t" ${p.review==='rejected'?'style="opacity:.55"':''}>${esc(p.title)}</span>
+    <span class="st ${p.plan_id?'pass':c}">${p.plan_id?'Planned':esc(l)} · ${p.total.toFixed(2)}</span>`;}
+function noveltyPanel(a){
+  if(!a)return `<div class="panel"><h3>Novelty</h3><p class="hint" style="margin:0">Not investigated yet. “Check novelty” searches OpenAlex, arXiv and Crossref,
+    the works citing the supporting papers and your corpus, compares the closest papers dimension by dimension, and classifies the gap by fixed rules.
+    It takes about half a minute; searches are cached.</p></div>`;
+  const [c,l]=CLS[a.classification]||['done',a.label],cov=a.coverage,f=a.findings,b=a.confidence_basis;
+  const dims=Object.keys(f.core_dimensions||{});
+  const rows=(f.closest||[]).map(p=>`<tr${p.publication_id===f.decided_by?' class="decided"':''}>
+      <td><div>${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>`:esc(p.title)}</div>
+        <div class="hint">${esc(p.year||'n.d.')} · ${p.availability==='metadata_only'?'title only':esc(p.availability.replace('_',' '))}${p.after_evidence?' · published after the gap’s evidence':''}${p.publication_id===f.decided_by?' · <b>decided the classification</b>':''}</div>
+        ${p.research_question?`<div class="hint">Model judge: ${p.research_question.verified?esc(p.research_question.result.replace('_',' ')):'discarded (its quote was not in the abstract)'}</div>`:''}</td>
+      <td class="num">${p.similarity.toFixed(2)}</td>
+      ${dims.map(d=>{const r=p.dimensions[d]||{result:'not_stated'};const [rc,rl]=DIMRES[r.result];return `<td><span class="chip ${rc}" title="${esc(r.quote||'')}">${rl}</span></td>`}).join('')}</tr>`).join('');
+  return `<div class="panel"><h3>Novelty investigation</h3>
+    <div class="tag ${c}" style="margin-top:6px">${esc(a.label)}</div>
+    <p style="margin:4px 0 6px">${esc(f.reason)}</p>
+    <div class="fg"><span>Confidence</span><b>${a.confidence.toFixed(2)}</b></div>
+    <details><summary class="hint">How the confidence is computed</summary><p class="hint">${esc(b.formula)}</p>
+      <p class="hint">coverage ${b.coverage} (sources ${b.sources_term}, screening ${b.screen_term}, text ${b.text_term}) · evidence ${b.evidence} · agreement ${b.agreement}</p></details>
+    <h4 class="fh">Search coverage ${cov.coverage_ok?'<span class="chip pass">meets the policy</span>':'<span class="chip hold">below the policy</span>'}</h4>
+    <p class="hint" style="margin:0">Sources answered: ${cov.sources_ok.map(s=>SRC_LABEL[s]||s).join(', ')||'none'}${cov.sources_failed.length?` · failed: <b>${cov.sources_failed.map(s=>SRC_LABEL[s]||s).join(', ')}</b>`:''}
+      · ${cov.screened} publications screened (${cov.with_abstract} with abstracts) · ${cov.citation_runs} citation search${cov.citation_runs===1?'':'es'} · your corpus${cov.excluded_supporting.length?` · ${cov.excluded_supporting.length} supporting paper(s) left out of the comparison`:''}</p>
+    <ul class="plain">${cov.queries.map(q=>`<li><span class="hint">${esc(QKIND[q.kind]||q.kind)}:</span> “${esc(q.query)}” <span class="hint">(${q.sources.map(s=>SRC_LABEL[s]||s).join(', ')})</span></li>`).join('')}</ul>
+    <h4 class="fh">Closest papers, dimension by dimension</h4>
+    <p class="hint" style="margin:0 0 6px">“Same” counts against novelty. Hover a result to see the sentence it rests on.</p>
+    ${rows?`<div class="tblwrap"><table class="cmp"><thead><tr><th>Paper</th><th>Similarity</th>${dims.map(d=>`<th>${esc(d.replace('_',' '))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="hint">No publications were screened.</p>'}
+    ${(f.evidence_against_novelty||[]).length?`<h4 class="fh">Evidence against novelty</h4><ul class="plain">${f.evidence_against_novelty.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+    ${(f.evidence_for_novelty||[]).length?`<h4 class="fh">Evidence for novelty</h4><ul class="plain">${f.evidence_for_novelty.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+    <h4 class="fh">What remains uncertain</h4><p class="hint" style="margin:0">${esc(a.uncertainty)}</p>
+    <p class="hint">Searched ${esc((a.searched_at||'').slice(0,16).replace('T',' '))} UTC.</p></div>`;}
+function rankPanel(g){
+  const w=meta.weights||{};
+  return `<div class="panel"><h3>Ranking</h3><div class="big">${g.total.toFixed(2)}</div><span class="math" style="display:block;color:var(--mute);margin:4px 0 8px">weighted total, using the weights below</span>
+    ${g.scores.map(s=>`<div class="meterrow"><div class="hd"><span>${esc(s.label)}</span><b>${s.score.toFixed(2)}</b></div><div class="bar"><i style="width:${Math.round(s.score*100)}%"></i></div><p>${esc(s.why)}</p></div>`).join('')}
+    <details style="margin-top:10px"><summary class="hint">Change the weights (0 to 5)</summary>
+      <div class="wts">${(meta.rank_dims||[]).map(d=>`<label>${esc(d.label)}<input class="in" type="number" min="0" max="5" step="0.5" data-w="${esc(d.key)}" value="${esc(w[d.key]??1)}"></label>`).join('')}</div>
+      <button class="btn" data-act="gap_weights">Apply weights to all gaps</button></details></div>`;}
+function corpusGapView(g){
+  const act=`${g.plan_id?`<button class="btn" data-goto="plans:${esc(g.plan_id)}">Open ${esc(g.plan_id)}</button>`:''}
+    <button class="btn ${g.assessment?'':'primary'}" data-act="novelty_check">${g.assessment?'Check novelty again':'Check novelty'}</button>
+    <button class="btn ${g.assessment&&!g.plan_id?'primary':''}" data-act="plan_gap">${g.plan_id?'Plan another experiment':'Plan an experiment'}</button>`;
+  const rev=[['candidate','Candidate'],['validated','Validated'],['rejected','Rejected']];
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(g.id)}</span><span class="chip t-future_work">${esc(g.origin_label)}</span>
+      <span>${g.papers} paper${g.papers===1?'':'s'}</span>${g.classification?`<span class="chip ${CLS[g.classification][0]}">${esc(g.class_label)}</span>`:''}</div>
+    <h2>${esc(g.title)}</h2>${g.title.replace(/…$/,'')===g.statement.replace(/[.\s]+$/,'')?'':`<p class="lead">${esc(g.statement)}</p>`}
+    ${g.question?`<p><b>Research question:</b> ${esc(g.question)} <span class="hint">(rewritten by ${esc(g.question_source)}; the evidence below is unchanged)</span></p>`:''}
+    <div class="act">${act}</div>
+    <div class="curate"><span class="hint">Your review:</span>${rev.map(([k,l])=>`<button class="seg-b" data-review="${k}" aria-pressed="${g.review===k}">${l}</button>`).join('')}
+      <span class="hint">The system never validates a gap; only you do.</span></div></section>
+  <section class="board"><div>
+    <div class="panel"><h3>Evidence</h3><p class="sub">${g.origin==='unexplored_combination'?'Inferred from what the corpus covers; no paper states this gap.':'Verified statements from the papers. Unverified model output is never used.'}</p>
+      ${g.evidence.map(e=>{const [c,l]=KIND[e.kind]||KIND.inference;return `<blockquote class="quote"><p>${esc(e.quote)}</p>
+        <cite>${e.pub?`<button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(e.pub)}">${esc(e.paper)}</button>`:esc(e.paper)}${e.page?`, p. ${esc(e.page)}`:''} <span class="chip ${c}">${l}</span></cite></blockquote>`}).join('')}</div>
+    <div class="stack-gap">${noveltyPanel(g.assessment)}</div></div>
+   <div class="side"><div class="panel"><h3>Research dimensions</h3><p class="sub">What defines the gap. The novelty check compares papers on the gap’s own dimensions; the source paper’s are context unless the gap names fewer than two.</p>
+      ${g.dimensions.map(d=>`<div class="fg"><span>${esc(d.name.replace('_',' '))}</span><b style="font-weight:400;text-align:right">${d.values.map(esc).join(', ')}<br><span class="hint">${esc(DSRC[d.source]||d.source)}${d.core?' · compared':' · context only'}</span></b></div>`).join('')||'<p class="hint">None recognised.</p>'}</div>
+    ${rankPanel(g)}</div></section>`;}
+
+/* ------------------------------------------- Research proposals (Phase 5) */
+const PSTAT={draft:['hold','Draft'],approved:['pass','Approved'],rejected:['fail','Rejected']};
+const FEAS={simulatable:'pass',needs_hardware:'hold',needs_physical_validation:'fail'};
+const JROLE={motivates:'Motivates the gap',closest_prior_work:'Closest prior work',baseline:'Baseline',method_source:'Method source'};
+const PSRC={literature:'pass',gap_evidence:'pass',assumption:'hold',researcher:'t-future_work'};
+let editing=null;
+function proposalRow(p){const [c,l]=PSTAT[p.status];
+  return `<span class="id">${esc(p.id)}<span class="chip ${FEAS[p.feasibility]}">${esc(p.feasibility_label)}</span></span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.verification&&!p.verification.stale?VP[p.verification.v][0]:c}">${l} · rev ${p.revision}${p.verification&&!p.verification.stale?` · ${VP[p.verification.v][1].toLowerCase()}`:''}</span>`;}
+function noisePanel(v){
+  if(!v.noise||!v.noise.length)return `<div class="panel"><h3>Noise</h3><p class="hint" style="margin:0">The plan states no noise parameters, so only the ideal circuit was simulated. Add parameters such as a depolarizing probability, readout error, T1 or T2 (with their source) to simulate them.</p></div>`;
+  const top=pr=>Object.entries(pr).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,x])=>`P(${esc(k)}) = ${x.toFixed(3)}`).join(', ');
+  return `<div class="panel"><h3>Under the plan’s stated noise</h3><p class="sub">Exact density-matrix simulation (qiskit-aer, no shot noise); readout error applied analytically. Ranges run at both ends.</p>
+    <div class="tblwrap"><table class="cmp"><thead><tr><th>Condition</th><th>Values and their source</th><th>Result</th></tr></thead><tbody>
+    ${v.noise.map(r=>`<tr><td>${esc(r.label)}</td><td class="hint">${[...new Set(Object.values(r.sources))].map(esc).join('<br>')}</td>
+      <td><div>${top(r.probabilities)}</div><div class="hint">TVD to ideal ${r.tvd_to_ideal}${r.fidelity!=null?` · fidelity ${r.fidelity}`:''}</div>
+      ${'matched' in r?`<span class="chip ${r.matched?'pass':'fail'}">${r.matched?'Matches the noisy prediction':'Does not match the noisy prediction'}</span>`:''}
+      ${r.ideal_prediction_under_noise?`<span class="chip ${r.ideal_prediction_under_noise.matched?'pass':'hold'}">${r.ideal_prediction_under_noise.matched?'Ideal prediction still holds':'Ideal prediction no longer holds'}</span>`:''}</td></tr>`).join('')}</tbody></table></div></div>`;}
+function sectionView(s){
+  const v=s.value,empty=Array.isArray(v)?!v.length:!v;
+  const body=empty?`<p class="hint" style="margin:0">${s.required?'<b class="hold">Required, not written yet.</b>':'Not written.'}</p>`
+    :Array.isArray(v)?`<ul class="plain">${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:`<p style="margin:0">${esc(v)}</p>`;
+  return `<div class="psec"><h4 class="fh">${esc(s.label)}</h4>${body}</div>`;}
+function circuitText(c){return c.gates.map(g=>`${g.name}${g.params?`(${g.params.map(x=>(+x).toFixed(3)).join(',')})`:''} q${g.target_qubits.join(',q')}`).join(' → ');}
+function proposalView(p){
+  if(editing===p.id)return proposalEdit(p);
+  const [c,l]=PSTAT[p.status];
+  const just=p.justification.map(j=>`<blockquote class="quote"><p>${esc(j.point)}</p>
+      ${j.quote?`<p class="hint" style="margin-top:6px">“${esc(j.quote)}”</p>`:''}
+      <cite><button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(j.pub)}">${esc(j.title)}</button> (${esc(j.year||'n.d.')})${j.doi?` · <a href="https://doi.org/${esc(j.doi)}" target="_blank" rel="noopener">doi:${esc(j.doi)}</a>`:''}
+        <span class="chip t-future_work">${esc(JROLE[j.role]||j.role)}</span>
+        ${j.quote?(j.verified?'<span class="chip pass">Quote verified</span>':'<span class="chip fail">Quote not found in the source</span>'):'<span class="chip hold">Inference, no quote</span>'}</cite></blockquote>`).join('');
+  const params=p.parameters.length?`<div class="tblwrap"><table class="cmp"><thead><tr><th>Parameter</th><th>Value</th><th>Source</th><th>Basis</th></tr></thead><tbody>
+      ${p.parameters.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${esc(x.value)} ${esc(x.unit)}</td><td><span class="chip ${PSRC[x.source]}">${esc(x.source_label)}</span></td>
+        <td class="hint">${x.pub?`<button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(x.pub)}">source</button> `:''}${esc(x.basis)}</td></tr>`).join('')}</tbody></table></div>`
+    :'<p class="hint" style="margin:0">No parameters yet. Every parameter must say whether it comes from the literature or is an assumption.</p>';
+  const circ=p.circuit?`<p class="math" style="margin:0 0 6px">${p.circuit.num_qubits} qubits: ${esc(circuitText(p.circuit))}</p>
+      <p class="hint" style="margin:0">Predicted: ${p.circuit.expected_outcomes.map(o=>`P(${esc(o.basis_state)}) = ${o.expected_probability}`).join(', ')||'no prediction'}${p.circuit.prediction_basis?` · ${esc(p.circuit.prediction_basis)}`:''}</p>
+      <p class="hint">Verification of the circuit runs on approved plans (next phase).</p>`:'<p class="hint" style="margin:0">No circuit specified.</p>';
+  const hist=p.history.map(h=>`<li>Revision ${h.revision} · ${esc(h.by)} · ${esc((h.at||'').slice(0,16).replace('T',' '))}${h.changed.length?` · changed: ${esc(h.changed.join(', '))}`:''}${h.note?` · “${esc(h.note)}”`:''}</li>`).join('');
+  const appr=p.approvals.map(a=>`<li><b>${esc(a.decision.replace('_',' '))}</b> on revision ${a.revision} · ${esc((a.at||'').slice(0,16).replace('T',' '))}${a.note?` · “${esc(a.note)}”`:''}</li>`).join('');
+  const canApprove=!p.empty_required.length;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><button class="link" style="padding:0;min-height:0" data-goto="gaps:${esc(p.gap_id)}">For ${esc(p.gap_id)}${p.gap_title?`: ${esc(p.gap_title)}`:''}</button>
+      <span>Revision ${p.revision}</span><span>${esc(p.generated_by==='template'?'Template draft':`Written by ${p.generated_by}`)}</span></div>
+    <div class="tag ${c}">${l}</div><h2>${esc(p.title)}</h2>
+    <p class="lead"><span class="chip ${FEAS[p.feasibility]}">${esc(p.feasibility_label)}</span> ${esc(p.feasibility_reason)}</p>
+    ${p.verification?`<p style="margin:0 0 8px"><span class="tag ${VP[p.verification.v][0]}" style="margin:0"><span class="ket">${VP[p.verification.v][2]}</span>${VP[p.verification.v][1]}</span>
+      <span class="hint"> ${p.verification.stale?`(revision ${p.verification.revision}; the plan has changed since)`:`on revision ${p.verification.revision}`}</span></p>`:''}
+    <div class="act">${p.can_verify?`<button class="btn primary" data-act="plan_verify">${p.verification&&!p.verification.stale?'Verify again':`Verify revision ${p.revision}`}</button>`:''}
+      <button class="btn ${p.can_verify?'':'primary'}" data-act="plan_edit_open">Edit plan</button><button class="btn" data-act="plan_redraft">Draft a new version</button></div>
+    ${p.can_verify?'':'<p class="hint">Approve the plan to verify it. Verification always runs on the approved revision.</p>'}
+    ${p.missing.length?`<ul class="missing">${p.missing.map(m=>`<li><span class="ket">|?⟩</span><span>${esc(m)}</span></li>`).join('')}</ul>`:''}
+    ${p.warnings.length?`<p class="hint">${p.warnings.map(esc).join(' ')}</p>`:''}</section>
+  ${tabBar(RTABS,RTABS.some(x=>x[0]===ptab)?ptab:'plan',{verdict:p.verification?[VP[p.verification.v][1],p.verification.v==='fail'?'f':p.verification.v==='hold'?'h':'']:null,
+     checks:p.verification?checkCounts(p.verification).checks:null})}
+  <div role="tabpanel" id="tp">${(RTABS.some(x=>x[0]===ptab)&&ptab!=='plan')?verificationTab(p,ptab):`
+  <section class="board"><div>
+    <div class="panel"><h3>Proposal</h3><p class="sub">Generated text is a draft for you to check; nothing here is a finding.</p>
+      ${p.sections.slice(0,6).map(sectionView).join('')}</div>
+    <div class="stack-gap"><div class="panel"><h3>Literature justification</h3><p class="sub">Every quote is checked against the stored source text.</p>${just||'<p class="hint">None.</p>'}</div></div>
+    <div class="stack-gap"><div class="panel"><h3>Experiment</h3>${p.sections.slice(6,12).map(sectionView).join('')}
+      <h4 class="fh">Experimental parameters</h4>${params}<h4 class="fh">Circuit</h4>${circ}</div></div>
+    <div class="stack-gap"><div class="panel"><h3>Evaluation and outlook</h3>${p.sections.slice(12).map(sectionView).join('')}</div></div></div>
+   <div class="side"><div class="panel"><h3>Your decision</h3>
+      <p class="sub">The system never approves a plan. Approval applies to revision ${p.revision}; any later edit makes a new draft.</p>
+      <label class="vh" for="decnote">Note</label><textarea id="decnote" class="in" rows="3" placeholder="Note (required to reject or request changes)"></textarea>
+      <div class="row" style="margin-top:10px"><button class="btn primary" data-decide="approved" ${canApprove?'':'disabled'}>Approve</button>
+        <button class="btn" data-decide="changes_requested">Request changes</button><button class="btn" data-decide="rejected">Reject</button></div>
+      ${canApprove?'':`<p class="hint">To approve, fill in: ${esc(p.empty_required.join(', '))}.</p>`}</div>
+    <div class="panel"><h3>Audit trail</h3><ul class="plain">${hist}</ul>${appr?`<h4 class="fh">Decisions</h4><ul class="plain">${appr}</ul>`:''}
+      ${p.runs.length?`<h4 class="fh">Verification runs</h4><ul class="plain">${p.runs.map(r=>`<li>${esc(VP[r.verdict][1])} on revision ${r.revision} · ${esc((r.at||'').slice(0,16).replace('T',' '))}</li>`).join('')}</ul>`:''}</div></div></section>`}</div>`;}
+const RTABS=[['plan','Plan'],['verdict','Verification'],['checks','Checks'],['report','Report']];
+function verificationTab(p,t){
+  const v=p.verification;
+  if(!v)return `<div class="panel"><h3>Not verified yet</h3><p class="hint" style="margin:0">${p.can_verify?'Choose “Verify”. The circuit is simulated, predictions, TVD and state fidelity are checked, and any stated noise is simulated.':'Approve the plan first; verification always runs on an approved revision.'}</p></div>`;
+  const stale=v.stale?`<p class="callout"><b>This run verified revision ${v.revision}.</b> The plan has changed since; approve and verify the new revision.</p>`:'';
+  if(t==='checks')return stale+checksTab(v);
+  if(t==='report')return stale+`<div class="row"><button class="btn primary" data-dl="md">Download Markdown report</button></div><pre class="md">${esc(v.md)}</pre>`;
+  return `${stale}<p class="lead" style="margin:0 0 16px">${esc(v.head)}</p><section class="board">${picture(v)}${side(v)}</section>
+    ${v.state_fidelity!=null?`<p class="hint">State fidelity with the plan’s expected state: <b>${v.state_fidelity.toFixed(4)}</b> (amplitudes, including phase).</p>`:''}
+    <div class="stack-gap">${noisePanel(v)}</div>
+    <p class="note">${esc(v.simulator)}. ${v.feasibility==='simulatable'?'Covers simulation only, not physical hardware.':v.feasibility==='needs_hardware'?'This plan requires quantum hardware; hardware validation has not been performed.':'This plan requires additional physical validation that simulation cannot provide.'}</p>`;}
+function proposalEdit(p){
+  const ta=(s)=>`<label class="pe"><span>${esc(s.label)}${s.required?' <b class="hold">required</b>':''}${s.kind==='list'?' <span class="hint">(one per line)</span>':''}</span>
+    <textarea class="in" rows="${s.kind==='list'?4:3}" data-pe="${esc(s.key)}" data-kind="${s.kind}">${esc(Array.isArray(s.value)?s.value.join('\n'):s.value)}</textarea></label>`;
+  const prow=(x,i)=>`<tr><td><input class="in" data-pp="name" data-i="${i}" value="${esc(x.name)}"></td><td><input class="in" data-pp="value" data-i="${i}" value="${esc(x.value)}"></td>
+    <td><input class="in" data-pp="unit" data-i="${i}" value="${esc(x.unit)}"></td><td class="hint">${esc(x.source_label||'Set by the researcher')}</td></tr>`;
+  const rows=[...p.parameters,{name:'',value:'',unit:''},{name:'',value:'',unit:''}];
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>Editing revision ${p.revision}; saving creates revision ${p.revision+1}</span></div>
+    <h2>Edit the plan</h2><p class="lead">Changed parameters are marked “Set by the researcher”. Unchanged ones keep their source.</p></section>
+  <form id="peform" class="panel pform">
+    <label class="pe"><span>Title</span><input class="in" data-pe="title" data-kind="text" value="${esc(p.title)}"></label>
+    ${p.sections.filter(s=>s.editable).map(ta).join('')}
+    <label class="pe"><span>Feasibility</span><select class="in" data-pe="feasibility_class" data-kind="text">
+      ${Object.entries({simulatable:'Simulatable',needs_hardware:'Requires quantum hardware',needs_physical_validation:'Requires additional physical validation'}).map(([k,l])=>`<option value="${k}" ${k===p.feasibility?'selected':''}>${l}</option>`).join('')}</select></label>
+    <div class="pe"><span>Experimental parameters <span class="hint">(clear a row's name and value to remove it)</span></span>
+      <div class="tblwrap"><table class="cmp"><thead><tr><th>Name</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody>${rows.map(prow).join('')}</tbody></table></div></div>
+    <label class="pe"><span>Circuit <span class="hint">(JSON: num_qubits, gates, expected_outcomes, prediction_basis; leave empty for none)</span></span>
+      <textarea class="in mono" rows="6" data-pe="circuit" data-kind="json">${esc(p.circuit?JSON.stringify(p.circuit,null,1):'')}</textarea></label>
+    <label class="pe"><span>What you changed and why (stored in the audit trail)</span><input class="in" id="penote"></label>
+    <p class="hint err" id="pe-err" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Save as revision ${p.revision+1}</button><button class="btn" type="button" data-act="plan_edit_cancel">Cancel</button></div></form>`;}
+function collectEdit(p){
+  const changes={},err=$('#pe-err');
+  document.querySelectorAll('[data-pe]').forEach(el=>{const k=el.dataset.pe,kind=el.dataset.kind;
+    if(kind==='list')changes[k]=el.value.split('\n').map(x=>x.trim()).filter(Boolean);
+    else if(kind==='json'){const t=el.value.trim();if(!t){changes[k]=null;return}
+      try{changes[k]=JSON.parse(t)}catch(e){throw new Error('The circuit is not valid JSON: '+e.message)}}
+    else changes[k]=el.value;});
+  const rows={};document.querySelectorAll('[data-pp]').forEach(el=>{(rows[el.dataset.i]=rows[el.dataset.i]||{})[el.dataset.pp]=el.value.trim()});
+  changes.parameters=Object.values(rows).filter(r=>r.name||r.value);
+  if(changes.parameters.some(r=>!r.name||!r.value))throw new Error('Every parameter needs a name and a value.');
+  return changes;}
+
+/* ------------------------------------------------- Guided runs (Phase 7) */
+const RSTAT={running:['run','Running'],waiting:['hold','Waiting for you'],done:['pass','Finished'],failed:['fail','Step failed'],cancelled:['done','Cancelled']};
+const SSTATE={done:'pass',waiting:'hold',failed:'fail',pending:'done',skipped:'done'};
+let runMode=null,runPick=null;
+const runForm={query:'',topic:'',collect:false,limit:'10',analyse_n:'5',sources:['openalex','arxiv','crossref']};
+function runRow(p){const [c,l]=RSTAT[p.status]||['done',p.status];
+  return `<span class="id">${esc(p.id)}<span class="chip ${c}">${l}</span></span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.verdict?VP[p.verdict][0]:'done'}">${esc(p.outcome||(p.waiting?(p.waiting.kind==='select_gap'?'Choose a gap':'Review the plan'):(p.steps.find(s=>s.state==='failed')||{}).label||''))}</span>`;}
+function runStart(){
+  const f=runForm,topics=meta.topics||[];
+  return `<section class="hero">${fringe}<h2>Guided research run</h2>
+    <p class="lead">One run goes from literature to a verified plan, step by step. It stops twice for you, to choose a gap and to approve the plan, and it is saved after every step, so it continues after a restart.</p></section>
+  <form id="runform" class="panel form" style="max-width:720px">
+    <label for="run-query">What to research <span class="hint">(leave empty to use your existing corpus)</span></label>
+    <input id="run-query" class="in" value="${esc(f.query)}" placeholder="e.g. readout error mitigation superconducting qubits">
+    <label for="run-topic">or a research area</label><select id="run-topic" class="in"><option value="">None</option>${topics.map(t=>`<option value="${esc(t.key)}" ${t.key===f.topic?'selected':''}>${esc(t.label)}</option>`).join('')}</select>
+    <label class="chk"><input type="checkbox" id="run-collect" ${f.collect?'checked':''}> Collect new papers first (OpenAlex, arXiv, Crossref)</label>
+    <div class="lf-row"><label>Results per source<input id="run-limit" class="in" inputmode="numeric" value="${esc(f.limit)}"></label>
+      <label>Papers to analyse in this run (0–20)<input id="run-analyse" class="in" inputmode="numeric" value="${esc(f.analyse_n)}"></label></div>
+    <p class="hint">Analysing uses the language model once per paper. Gaps come from every analysed paper in the corpus.</p>
+    <p class="hint err" id="run-err" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Start the run</button>${D.runs.length?'<button class="btn" type="button" data-act="run_list">Back to runs</button>':''}</div></form>`;}
+function runView(p){
+  const [c,l]=RSTAT[p.status]||['done',p.status];
+  const pipe=`<ol class="runsteps">${p.steps.map(s=>`<li class="${SSTATE[s.state]}"><span class="chip ${SSTATE[s.state]}">${s.state==='done'?'Done':s.state==='waiting'?'Waiting for you':s.state==='failed'?'Failed':s.state==='skipped'?'Not reached':'Next'}</span> ${esc(s.label)}${s.times>1?` <span class="hint">×${s.times}</span>`:''}</li>`).join('')}</ol>`;
+  let wait='';
+  if(p.status==='waiting'&&p.waiting&&p.waiting.kind==='select_gap'){
+    const pick=runPick&&p.candidates.some(x=>`CG-${x.id}`===runPick)?runPick:`CG-${(p.candidates[0]||{}).id}`;
+    wait=`<div class="panel"><h3>Choose a gap</h3><p class="sub">${esc(p.waiting.message)} Ranked by the default weights; open one to read its evidence.</p>
+      ${p.candidates.map(x=>`<label class="pick"><input type="radio" name="rgap" value="CG-${x.id}" ${`CG-${x.id}`===pick?'checked':''}>
+        <span><b>CG-${x.id}</b> ${esc(x.title)}<br><span class="hint">${esc(x.origin.replace('_',' '))} · score ${x.total.toFixed(2)}${x.classification?` · ${esc(CLS[x.classification][1])}`:''}</span>
+        <button type="button" class="link" style="padding:0;min-height:0" data-goto="gaps:CG-${x.id}">open</button></span></label>`).join('')}
+      <div class="row" style="margin-top:12px"><button class="btn primary" data-act="run_resume_gap">Continue with this gap</button></div></div>`;}
+  else if(p.status==='waiting'&&p.waiting&&p.waiting.kind==='review_plan'){
+    wait=`<div class="panel"><h3>Review the plan</h3><p class="sub">${esc(p.waiting.message)}</p>
+      <div class="row"><button class="btn primary" data-goto="plans:${esc(p.waiting.plan_id)}">Open ${esc(p.waiting.plan_id)}</button><button class="btn" data-act="run_resume_plan">Continue the run</button></div>
+      <p class="hint">Continuing before you approve or reject simply waits again; the run never decides for you.</p></div>`;}
+  else if(p.status==='failed'){
+    wait=`<div class="panel"><h3>A step failed</h3><p class="errbox">${esc(p.error)}</p><p class="sub">Everything before it is saved. Retry re-runs only the failed step.</p>
+      <div class="row"><button class="btn primary" data-act="run_retry">Retry the step</button><button class="btn" data-act="run_cancel">Cancel the run</button></div></div>`;}
+  const results=[p.gap_id&&`<button class="link" style="padding:0;min-height:0" data-goto="gaps:${esc(p.gap_id)}">${esc(p.gap_id)}</button>`,
+    p.novelty&&`novelty: ${esc(p.novelty.label)}`,p.plan_id&&`<button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(p.plan_id)}">${esc(p.plan_id)}</button>`,
+    p.verdict&&`verdict: <b class="${VP[p.verdict][0]}">${esc(VP[p.verdict][1])}</b>`].filter(Boolean).join(' · ');
+  const log=`<div class="tblwrap"><table class="cmp"><thead><tr><th>Step</th><th>Started (UTC)</th><th>Took</th><th>What happened</th></tr></thead><tbody>
+    ${p.log.map(e=>`<tr><td>${esc(e.label)}</td><td class="num">${esc((e.started||'').slice(11,19))}</td><td class="num">${e.ms>=1000?(e.ms/1000).toFixed(1)+' s':e.ms+' ms'}</td>
+      <td>${esc(e.summary)}${e.calls&&e.calls.length?`<details><summary class="hint">${e.calls.length} call${e.calls.length===1?'':'s'}</summary><ul class="plain">${e.calls.map(x=>`<li class="hint">${esc(x)}</li>`).join('')}</ul></details>`:''}</td></tr>`).join('')}
+    ${p.failures.map(f=>`<tr><td>${esc((meta.run_nodes||{})[f.node]||f.node)}</td><td class="num">${esc((f.at||'').slice(11,19))}</td><td></td><td class="fail">Failed: ${esc(f.error)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>started ${esc((p.created_at||'').slice(0,16).replace('T',' '))} UTC</span>
+      ${p.params.collect?`<span>collects ${esc(p.params.limit)} per source</span>`:'<span>existing corpus</span>'}<span>analyses ${esc(p.params.analyse_n||0)} papers</span></div>
+    <div class="tag ${c}">${l}</div><h2>${esc(p.title)}</h2>${p.outcome?`<p class="lead">${esc(p.outcome)}.</p>`:''}${results?`<p>${results}</p>`:''}
+    <div class="act"><button class="btn" data-act="run_new">Start another run</button>${['running','waiting'].includes(p.status)?'<button class="btn" data-act="run_cancel">Cancel</button>':''}</div></section>
+  <section class="board"><div>${wait?wait+'<div class="stack-gap"></div>':''}<div class="panel"><h3>Execution log</h3><p class="sub">One row per step, with its timing and the calls it made. Saved in the run’s checkpoint.</p>${log}</div></div>
+    <div class="side"><div class="panel"><h3>Steps</h3>${pipe}<p class="hint">A re-query happens only while search coverage is low (at most twice); a revision only after a failed verification (at most once).</p></div></div></section>`;}
+
+/* ------------------------------------------------ Overview and reports (Phase 8) */
+const PV={quote:'Verified quote',generated:'Model-generated',computed:'Computed',inference:'Inference across papers',researcher:'Researcher',metadata:'Metadata'};
+function reportRow(p){
+  if(p.kind==='overview')return `<span class="id">Overview</span><span class="t">The investigation at a glance</span>`;
+  const [c,l]=PSTAT[p.status];
+  return `<span class="id">${esc(p.id)}<span class="chip ${c}">${l}</span>${p.verdict?`<span class="chip ${VP[p.verdict][0]}">${esc(VP[p.verdict][1])}</span>`:''}</span><span class="t">${esc(p.title)}</span>
+    <span class="st ${p.report?'pass':'done'}">${p.report?`Report built (revision ${p.built_for_revision})`:'No report yet'}</span>`;}
+function overviewView(o){
+  const go=k=>({literature:'literature',gaps:'gaps',plans:'plans',verified:'plans',runs:'runs'})[k];
+  const todo=[...o.waiting.map(w=>`<li><button class="link" style="padding:0;min-height:0" data-goto="runs:${esc(w.id)}">${esc(w.id)}</button> is waiting for you to ${w.kind==='select_gap'?'choose a gap':'review its plan'}.</li>`),
+    ...o.to_review.map(id=>`<li><button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(id)}">${esc(id)}</button> is a draft: edit it, then approve or reject it.</li>`),
+    ...o.to_verify.map(id=>`<li><button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(id)}">${esc(id)}</button> is approved but not verified on its current revision.</li>`)];
+  return `<section class="hero">${fringe}<h2>Overview</h2><p class="lead">Where the investigation stands, from collected literature to verified plans. Reports are built per plan from what is stored, with every statement labelled by where it came from.</p></section>
+  <div class="ovgrid">${o.stages.map(s=>`<button class="panel ovcard" data-sec="${go(s.key)}"><span class="hint">${esc(s.label)}</span><span class="big">${s.main}</span><span class="hint">${esc(s.detail)}</span></button>`).join('')}</div>
+  <div class="stack-gap"><div class="panel"><h3>Needs your attention</h3>${todo.length?`<ul class="plain">${todo.join('')}</ul>`:'<p class="hint" style="margin:0">Nothing is waiting for you.</p>'}</div></div>`;}
+function reportView(p){
+  const r=p.report,[c,l]=PSTAT[p.status];
+  const head=`<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><button class="link" style="padding:0;min-height:0" data-goto="plans:${esc(p.id)}">Open the plan</button><span>Revision ${p.revision}</span></div>
+    <div class="tag ${c}">${l}</div><h2>${esc(r?r.title:p.title)}</h2>
+    <div class="act"><button class="btn ${r?'':'primary'}" data-act="report_build">${r?'Rebuild report':'Build report'}</button>
+      ${r?`<button class="btn primary" data-rdl="pdf">Download PDF</button><button class="btn" data-rdl="md">Markdown</button><button class="btn" data-rdl="json">JSON</button>`:''}</div>
+    ${r&&p.built_for_revision!==p.revision?`<p class="callout">This report describes revision ${p.built_for_revision}; the plan is now at revision ${p.revision}. Rebuild it.</p>`:''}
+    ${!r?'<p class="hint">The report has the 17 sections of a research investigation: domain, collection, papers, themes, comparison, gaps, novelty, evidence, closest work, the selected gap, question and hypothesis, plan, verification, simulation, limitations, approval and references.</p>':''}</section>`;
+  if(!r)return head;
+  const legend=`<p class="pvlegend">${Object.entries(PV).map(([k,v])=>`<span class="pv pv-${k}">${esc(v)}</span>`).join(' ')}<span class="hint"> Only verified quotes are taken word for word from a source; model-generated text is a draft to check.</span></p>`;
+  const toc=`<nav class="pvtoc">${r.sections.map(s=>`<a href="#rs-${s.n}">${s.n}. ${esc(s.title)}</a>`).join('')}</nav>`;
+  const refLink=x=>x.doi_url||x.arxiv_url||x.url;
+  const body=r.sections.map(s=>`<section class="panel rsec" id="rs-${s.n}"><h3>${s.n}. ${esc(s.title)}</h3>
+    ${s.items.map(it=>`<p class="pvi pvi-${it.kind}"><span class="pv pv-${it.kind}">${esc(PV[it.kind])}${it.kind==='generated'&&it.source?` · ${esc(it.source)}`:''}</span> ${esc(it.text)}${it.refs?` <span class="hint">${esc(it.refs)}</span>`:''}</p>`).join('')}
+    ${s.tables.filter(t=>t.rows.length).map(t=>`<div class="tblwrap"><table class="cmp"><thead><tr>${t.columns.map(c2=>`<th>${esc(c2)}</th>`).join('')}</tr></thead><tbody>${t.rows.map(row=>`<tr>${row.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('')}
+    ${s.n===17?`<ol class="refs">${r.references.map(x=>`<li value="${x.n}">${esc(x.authors?x.authors+', ':'')}${esc(x.title)}${x.venue?`, <i>${esc(x.venue)}</i>`:''} (${esc(x.year||'n.d.')}). ${refLink(x)?`<a href="${esc(refLink(x))}" target="_blank" rel="noopener">${esc(x.doi?'doi:'+x.doi:refLink(x))}</a>`:''}</li>`).join('')}</ol>`:''}</section>`).join('');
+  return head+legend+`<div class="rgrid">${toc}<div class="rbody">${body}</div></div>`;}
+function downloadReport(p,fmt){
+  const name=`${p.id}-rev${p.built_for_revision}-report.${fmt}`;
+  if(fmt==='pdf'){const bin=atob(p.pdf),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([fmt==='md'?p.md:p.json],{type:fmt==='md'?'text/markdown':'application/json'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);}
+
+/* ------------------------------------------------- Plan / proposal view */
+function verdictView(p){
+  const isPlan=sec==='plans',[c,t,k]=(isPlan?VP:V)[p.v];
+  if(isPlan){
+    const pl=p.plan;
+    const counts=checkCounts(p);
+    const body={plan:()=>`<section class="board"><div class="panel"><h3>Hypothesis</h3><p style="font-size:18px;margin:6px 0 16px">${esc(pl.hypothesis)}</p>
+        <h3>Method</h3><ol>${pl.method.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+        <h3 style="margin-top:18px">Why this addresses the gap</h3><p class="hint">${esc(pl.rationale)}</p></div>
+       <div class="side"><div class="panel"><h3>Variables</h3><dl class="dl" style="grid-template-columns:1fr;gap:2px">${pl.variables.map(([k2,v2])=>`<dt>${esc(k2)}</dt><dd style="margin-bottom:8px">${esc(v2)}</dd>`).join('')}</dl></div>
+        <div class="panel"><h3>Success metrics</h3><ul class="plain">${pl.metrics.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div></div></section>
+       <div class="stack-gap board"><div class="panel"><h3>Risks</h3><ul class="plain">${pl.risks.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>
+        <div class="panel"><h3>Baseline and resources</h3><p class="hint" style="margin-top:6px">${esc(pl.baseline)}</p><p class="hint">${esc(pl.resources)}</p></div></div>`,
+      verdict:()=>`<section class="board">${picture(p)}${side(p)}</section>`,checks:()=>checksTab(p),evidence:()=>evidenceTab(p),report:()=>reportTab(p)};
+    return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><button class="link" style="padding:0;min-height:0" data-goto="gaps:${esc(p.gap_id)}">Addresses ${esc(p.gap_id)}: ${esc(p.gap_title)}</button><span>${p.generated_by==='llm'?'Written by the model':'Template plan'}</span></div>
+      <div class="tag ${c}"><span class="ket">${k}</span>${t}</div><h2>${esc(p.title)}</h2><p class="lead">${esc(p.head)}</p>
+      <div class="act"><button class="btn primary" id="agenda">Download research agenda</button><button class="btn" id="dlmd">Download plan report</button><button class="btn" id="rerun">Re-verify</button></div></section>
+      ${p.revision?`<p class="callout"><b>Revised once after verification.</b> ${esc(p.revision_note||'')}</p>`:''}
+      ${tabBar(PTABS,ptab,counts)}<div role="tabpanel" id="tp" aria-labelledby="t-${ptab}">${body[ptab]()}</div>
+      <p class="note">Report ${esc(p.report_id)}. Verification covers ideal statevector simulation only; review the plan before running it on hardware.</p>`;}
+  const [act]=DEC[p.v],dec=decided(p);
+  const comp=compose===p.id?`<form class="compose" id="cf" novalidate>
+    <label for="msg">${p.v==='fail'?'What should the author fix?':'What does the author need to add?'}</label>
+    <textarea id="msg" aria-describedby="msgh" ${err?'aria-invalid="true"':''} placeholder="${p.v==='fail'?'e.g. Revise the expected distribution or the circuit so they agree.':'e.g. State the register size, the gate sequence and the expected outcome probabilities.'}">${esc(drafts[p.id]||'')}</textarea>
+    ${err?`<p class="err" id="msgh">${err}</p>`:`<p class="hint" id="msgh">The check log goes with your note.</p>`}
+    <div class="row"><button class="btn primary ${c}" type="submit">${act}</button><button class="btn" type="button" id="cancel">Cancel</button></div></form>`:'';
+  const actions=dec?`<div class="act"><span class="hint">${DEC[p.v][1]}.</span><button class="btn" id="reopen">Reopen</button></div>`
+   :compose===p.id?'':`<div class="act"><button class="btn primary ${c}" id="go">${act}</button><button class="btn" id="dlmd">Download report</button></div>`;
+  const counts=Object.assign(checkCounts(p),{extracted:p.missing.length?[`${p.missing.length} missing`,'h']:null});
+  const body={verdict:()=>`<section class="board">${picture(p)}${side(p)}</section>`,extracted:()=>extracted(p),checks:()=>checksTab(p),evidence:()=>evidenceTab(p),report:()=>reportTab(p)};
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span><span>${esc(p.when)}</span></div>
+  <div class="tag ${c}"><span class="ket">${k}</span>${t}</div><h2>${esc(p.head)}</h2>${actions}</section>${comp}
+  ${tabBar(TABS,tab,counts)}<div role="tabpanel" id="tp" aria-labelledby="t-${tab}">${body[tab]()}</div>
+  <p class="note">Report ${esc(p.report_id)}. A pass covers ideal statevector simulation only; expert review is still required before running on hardware.</p>`;}
+
+/* --------------------------------------------------- loading / empty / error */
+/* ------------------------------------------------------ Literature views */
+const statusClass=s=>({ok:'pass',cached:'pass',rate_limited:'hold',failed:'fail',skipped:'done'}[s]||'done');
+const statusLabel=s=>({ok:'OK',cached:'From cache',rate_limited:'Rate-limited',failed:'Failed',skipped:'Skipped'}[s]||s);
+function collectPanel(){
+  const f=litForm,topics=meta.topics||[],rep=meta.lit_report,runs=meta.search_runs||[];
+  const topic=topics.find(t=>t.key===f.topic);
+  const srcBox=(k,label,note)=>`<label class="chk"><input type="checkbox" name="src" value="${k}" ${f.sources.includes(k)?'checked':''}> ${label}${note?` <span class="hint">${note}</span>`:''}</label>`;
+  const report=rep?`<div class="panel"><h3>Last collection</h3><p class="sub">“${esc(rep.query)}”${rep.filters.year_from||rep.filters.year_to?`, ${esc(rep.filters.year_from||'…')}–${esc(rep.filters.year_to||'…')}`:''}. ${rep.unique} unique papers, ${rep.new} new to the database, ${rep.merged} matched papers already stored.</p>
+    <table class="stack"><thead><tr><th>Source</th><th>Status</th><th>Returned</th><th>New</th><th>Already stored</th><th>Available at source</th></tr></thead><tbody>
+    ${rep.outcomes.map(o=>`<tr><td>${esc(SRC_LABEL[o.source]||o.source)}</td><td class="nw"><span class="st ${statusClass(o.status)}">${statusLabel(o.status)}</span>${o.error?`<div class="cid">${esc(o.error)}</div>`:''}</td>
+      <td>${o.returned}</td><td>${o.new}</td><td>${o.merged}</td><td>${o.total_available!=null?Number(o.total_available).toLocaleString():'Not reported'}</td></tr>`).join('')}</tbody></table></div>`:'';
+  const history=runs.length?`<details class="sec"><summary>Search history (${runs.length} most recent)</summary><table class="stack"><thead><tr><th>When</th><th>Source</th><th>Query</th><th>Status</th><th>Returned</th></tr></thead><tbody>
+    ${runs.map(r=>`<tr><td class="nw">${esc(r.at)}</td><td>${esc(SRC_LABEL[r.source]||r.source)}</td><td>${esc(r.query)}</td><td class="nw"><span class="st ${statusClass(r.status)}">${statusLabel(r.status)}</span></td><td>${r.returned}</td></tr>`).join('')}</tbody></table></details>`:'';
+  return `<section class="hero">${fringe}<h2>Collect quantum physics literature</h2>
+    <p class="lead">Search scholarly databases and store what they return, with source links and retrieval times. Nothing is invented: when a source has no abstract, the paper is kept and marked metadata only.</p></section>
+  <div class="board"><form class="panel form" id="litform" novalidate>
+    <h3>Search</h3>
+    <label for="lit-topic">Research area</label>
+    <select id="lit-topic" class="in">${topics.map(t=>`<option value="${esc(t.key)}" ${t.key===f.topic?'selected':''}>${esc(t.label)}</option>`).join('')}<option value="" ${!f.topic?'selected':''}>Custom query</option></select>
+    <label for="lit-query">Query</label>
+    <input id="lit-query" class="in" placeholder="${esc(topic?topic.query:'e.g. GHZ state fidelity superconducting')}" value="${esc(f.query)}">
+    <p class="hint">Leave empty to use the research area’s query. Put phrases in "quotes".</p>
+    <div class="lf-row"><div><label for="lit-y1">From year</label><input id="lit-y1" class="in" inputmode="numeric" value="${esc(f.year_from)}" placeholder="Any"></div>
+      <div><label for="lit-y2">To year</label><input id="lit-y2" class="in" inputmode="numeric" value="${esc(f.year_to)}" placeholder="Any"></div>
+      <div><label for="lit-limit">Per source</label><select id="lit-limit" class="in">${['10','25','50','100'].map(n=>`<option ${n===f.limit?'selected':''}>${n}</option>`).join('')}</select></div></div>
+    <fieldset class="srcs"><legend>Sources</legend>${srcBox('openalex','OpenAlex',meta.openalex_key?'':'(shared daily budget without a key)')}${srcBox('arxiv','arXiv')}
+      ${srcBox('crossref','Crossref')}${srcBox('semantic_scholar','Semantic Scholar',meta.s2_key?'':'(often rate-limited without a key)')}</fieldset>
+    <p class="err" id="lit-err" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Collect papers</button></div></form>
+   <div class="side"><form class="panel form" id="doiform" novalidate><h3>Add one paper by DOI</h3>
+      <label for="lit-doi">DOI</label><input id="lit-doi" class="in" placeholder="10.1038/s41586-023-06505-7" value="${esc(f.doi)}">
+      <p class="err" id="doi-err" hidden></p><div class="row"><button class="btn" type="submit">Look up</button></div></form>
+    <div class="panel"><h3>In the database</h3>
+      <div class="fg"><span>Papers</span><b>${D.literature.length}</b></div>
+      <div class="fg"><span>With abstract</span><b>${D.literature.filter(p=>p.availability!=='metadata_only').length}</b></div>
+      <div class="fg"><span>Metadata only</span><b>${D.literature.filter(p=>p.availability==='metadata_only').length}</b></div>
+      <div class="fg"><span>Full text</span><b>${D.literature.filter(p=>p.availability==='full_text').length}</b></div>
+      <div class="fg"><span>Analysed</span><b>${D.literature.filter(p=>p.analysed).length}</b></div>
+      <div class="fg"><span>Excluded</span><b>${D.literature.filter(p=>p.curation==='excluded').length}</b></div>
+      <div class="row" style="margin-top:12px"><button class="btn" data-litmode="corpus">Corpus analysis</button></div></div></div></div>
+  <div class="stack-gap">${report}</div>${history}`;}
+function litView(p){
+  const [c,l]=AVAIL[p.availability],authors=p.authors.join(', ')+(p.author_count>p.authors.length?` and ${p.author_count-p.authors.length} more`:'');
+  const link=(href,text)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`:'';
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc([p.venue,p.date||p.year].filter(Boolean).join(', '))}</span><span class="chip ${c}">${l}</span>${p.is_open_access?'<span class="chip pass">Open access</span>':''}
+    ${p.preprint_only?'<span class="chip hold" title="No journal or conference version recorded">Preprint or repository deposit</span>':''}${(p.work_types||[]).length?`<span>Type: ${esc(p.work_types.join(', '))}</span>`:''}</div>
+    <h2>${esc(p.title)}</h2><p class="lead">${esc(authors||'Authors not listed by the source')}</p>
+    <div class="act">${p.source_url?`<a class="btn primary" href="${esc(p.source_url)}" target="_blank" rel="noopener noreferrer">Open source page</a>`:''}
+      ${p.pdf_url?`<a class="btn" href="${esc(p.pdf_url)}" target="_blank" rel="noopener noreferrer">Open PDF</a>`:''}
+      ${p.arxiv_id&&p.availability!=='full_text'?`<button class="btn" data-act="lit_fulltext">Get full text from arXiv</button>`:''}
+      ${p.availability!=='metadata_only'?`<button class="btn" data-act="lit_analyse">${p.analysed?'Analyse again':'Analyse paper'}</button>`:''}
+      <button class="btn" data-litmode="collect">Collect more literature</button></div>
+    <div class="curate" role="group" aria-label="Corpus decision"><span class="hint">In the corpus?</span>
+      ${[['included','Include'],['excluded','Exclude'],['unreviewed','Undecided']].map(([k,l])=>`<button class="seg-b" data-curate="${k}" aria-pressed="${(p.curation||'unreviewed')===k}">${l}</button>`).join('')}
+      <span class="hint">${p.curation==='excluded'?'Excluded papers are kept but never used for gaps or themes.':p.curation==='included'?'Used for gaps and themes.':'Undecided papers are used until you exclude them.'}</span></div></section>
+  ${p.analysis?analysisPanel(p.analysis):''}
+  <section class="board"><div class="panel"><h3>Abstract</h3>
+    ${p.abstract?`<p class="sub">From ${esc(SRC_LABEL[p.abstract_source]||p.abstract_source||'source')}, verbatim.</p><p style="margin:0;max-width:72ch">${esc(p.abstract)}</p>`
+      :`<p class="errbox" style="color:var(--hold);background:color-mix(in srgb,var(--hold) 10%,transparent)">No source returned an abstract for this paper, so only its metadata is stored. It can be cited but not analysed until the abstract or full text is available.</p>`}
+    ${p.availability==='full_text'?`<p class="hint" style="margin-top:14px">Full text: ${p.fulltext_pages||'?'} pages, downloaded from arXiv (open access) and indexed in the knowledge base.</p>`:''}</div>
+   <div class="side"><div class="panel"><h3>Identifiers</h3>
+      <div class="fg"><span>DOI</span><b style="font-weight:400">${p.doi?link('https://doi.org/'+p.doi,p.doi):'None recorded'}</b></div>
+      <div class="fg"><span>arXiv</span><b style="font-weight:400">${p.arxiv_id?link('https://arxiv.org/abs/'+p.arxiv_id,p.arxiv_id):'None recorded'}</b></div>
+      <div class="fg"><span>OpenAlex</span><b style="font-weight:400">${p.openalex_id?link('https://openalex.org/'+p.openalex_id,p.openalex_id):'None recorded'}</b></div>
+      ${p.cited_by!=null?`<div class="fg"><span>Cited by</span><b>${p.cited_by}</b></div>`:''}
+      ${p.references?`<div class="fg"><span>References</span><b>${p.references}</b></div>`:''}</div>
+    <div class="panel"><h3>Retrieved from</h3>${p.sources.map(s=>`<div class="fg"><span>${link(s.url,SRC_LABEL[s.name]||s.name)||esc(SRC_LABEL[s.name]||s.name)}</span><b style="font-weight:400">${esc(s.retrieved_at)} UTC</b></div>`).join('')}</div>
+    ${p.versions.length?`<div class="panel"><h3>Versions</h3>${p.versions.map(v=>`<div class="fg"><span>${link(v.url,v.label)||esc(v.label)}</span><b style="font-weight:400">${esc(v.date||'date not given')}</b></div>`).join('')}</div>`:''}
+    ${p.conflicts.length?`<div class="panel"><h3>Identifier conflicts</h3><p class="hint">Sources disagreed; the first value was kept.</p>${p.conflicts.map(x=>`<p class="cid">${esc(JSON.stringify(x))}</p>`).join('')}</div>`:''}</div></section>`;}
+const KIND={direct:['pass','Quote, verified'],interpretation:['t-future_work','Interpretation, evidence verified'],
+  unverified:['fail','Unverified: evidence not found in the paper'],inference:['hold','Inference across papers']};
+function analysisPanel(a){
+  const dims=Object.entries(a.dims).filter(([,v])=>v.length);
+  return `<div class="stack-gap"><div class="panel"><h3>Research analysis</h3>
+    <p class="sub">From the ${a.from==='full_text'?'full text':'abstract'}${a.llm?` by ${esc(a.llm)} plus the paper’s own sentences`:' using the paper’s own sentences (no live model)'}.
+      ${a.counts.direct} verified quotes, ${a.counts.interpretation} verified interpretations${a.counts.unverified?`, <b class="fail">${a.counts.unverified} unverified</b> (shown, never used as evidence)`:''}.</p>
+    ${a.warnings.length?`<p class="hint">${a.warnings.map(esc).join(' ')}</p>`:''}
+    ${dims.length?`<div class="dims">${dims.map(([k,v])=>`<div><span class="hint">${esc(k)}</span><div>${v.map(x=>`<span class="chip t-future_work">${esc(x)}</span>`).join(' ')}</div></div>`).join('')}</div>`:''}
+    ${a.fields.map(f=>`<h4 class="fh">${esc(f.label)} <span class="cnt">${f.items.length}</span></h4>
+      ${f.items.map(it=>{const [c,l]=KIND[it.kind]||KIND.inference;return `<div class="stmt ${it.kind}">
+        <p>${esc(it.text)}</p>
+        <div class="stmt-meta"><span class="chip ${c}">${l}</span>${it.page?`<span>p. ${esc(it.page)}</span>`:''}<span>${esc(it.extractor==='rule-based'?'Paper’s own sentence':it.extractor)}</span><span>confidence ${it.confidence}</span></div>
+        ${it.kind!=='direct'&&it.excerpt?`<details><summary>${it.verified?'Supporting passage':'Passage the model cited (not found)'}</summary><blockquote class="quote"><p>${esc(it.excerpt)}</p></blockquote></details>`:''}</div>`}).join('')}`).join('')}
+  </div></div>`;}
+function corpusView(){
+  const c=meta.corpus,lits=D.literature,inc=lits.filter(p=>p.curation==='included').length,exc=lits.filter(p=>p.curation==='excluded').length,
+    an=lits.filter(p=>p.analysed).length,todo=lits.filter(p=>!p.analysed&&p.curation!=='excluded'&&p.availability!=='metadata_only').length;
+  const head=`<section class="hero">${fringe}<h2>Corpus analysis</h2><p class="lead">What the collected papers have in common and what they leave untouched. Everything here is an inference across papers and lists the papers behind it.</p>
+    <div class="act"><button class="btn primary" data-act="corpus_run">${c?'Run again':'Run cross-paper analysis'}</button>
+      ${todo?`<button class="btn" data-act="lit_analyse_next">Analyse next ${Math.min(5,todo)} of ${todo} unanalysed</button>`:''}
+      <button class="btn" data-litmode="collect">Back to collecting</button></div>
+    <p class="hint">${lits.length} papers: ${an} analysed, ${inc} included, ${exc} excluded, ${lits.length-inc-exc} undecided. Excluded and metadata-only papers are left out.</p></section>`;
+  if(!c)return head+`<div class="panel"><p class="hint" style="margin:0">No cross-paper analysis yet. Analyse some papers, then run it.</p></div>`;
+  const plink=x=>`<button class="link" style="padding:0;min-height:0" data-goto="literature:${esc(x.id)}">${esc(x.title)}</button>`;
+  return head+`<div class="board"><div class="panel"><h3>Themes</h3><p class="sub">Papers grouped by meaning (${c.papers} analysed papers, ${esc(c.generated_at)} UTC). Labels name what is distinctive about each group.</p>
+      ${c.themes.map(t=>`<details class="theme"><summary><b>${esc(t.label)}</b> <span class="cnt">${t.papers.length}</span></summary><ul class="plain">${t.papers.map(x=>`<li>${plink(x)}</li>`).join('')}</ul></details>`).join('')}</div>
+    <div class="side"><div class="panel"><h3>Untried in this corpus</h3><p class="sub">Combinations no collected paper studies, although each side is studied by 2 or more papers. Absence here is not evidence of absence in the literature; Phase 4 checks that.</p>
+      ${c.untried.length?c.untried.slice(0,10).map(u=>`<div class="fg"><span>${esc(u.row)} × ${esc(u.col)}</span><b style="font-weight:400">${u.row_papers} / ${u.col_papers}</b></div>`).join(''):'<p class="hint">None found.</p>'}</div></div></div>
+  <div class="stack-gap"><div class="panel"><h3>Recurring limitations, open problems and future work</h3><p class="sub">Verified statements that two or more different papers make.</p>
+    ${c.recurring.length?c.recurring.map(r=>`<div class="stmt inference"><p><b>${esc(r.representative)}</b></p><div class="stmt-meta"><span class="chip hold">${esc(r.field.replace('_',' '))}</span><span>${r.papers} papers</span></div>
+      <details><summary>Statements</summary>${r.members.map(m=>`<blockquote class="quote"><p>${esc(m.text)}</p><cite>${plink(m)}${m.page?`, p. ${m.page}`:''}</cite></blockquote>`).join('')}</details></div>`).join('')
+      :'<p class="hint">No statement recurs across papers in this corpus. Abstracts rarely state limitations; fetching full texts gives this more to work with.</p>'}</div>
+  <div class="panel"><h3>Coverage: method × platform</h3>${c.method_platform.length?`<table class="stack"><thead><tr><th>Method</th><th>Platform</th><th>Papers</th></tr></thead><tbody>${c.method_platform.map(x=>`<tr><td>${esc(x.row)}</td><td>${esc(x.col)}</td><td>${x.n}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">No paper names both a method and a platform.</p>'}</div></div>`;}
+function loadingView(title,file,steps,step){
+  const i=Math.min(step||0,steps.length-1);
+  return `<section class="hero">${fringe}<div class="meta">${file?`<span>${esc(file)}</span>`:''}</div>
+  <div class="tag run"><span class="ket">|ψ⟩</span>Working</div><h2>${esc(title)}</h2><div class="sk pulse" style="height:20px;max-width:420px;margin-top:14px"></div></section>
+  <section class="board"><div class="panel"><ol class="steps" aria-label="Progress">${steps.map((s,j)=>`<li class="${j<i?'ok':j===i?'on':''}">${s}${j===i?'…':''}</li>`).join('')}</ol></div>
+   <div class="panel"><div class="sk pulse" style="height:14px;width:60%;margin-bottom:10px"></div><div class="sk pulse" style="height:30px;width:40%;margin-bottom:22px"></div><div class="sk pulse" style="height:14px;width:70%;margin-bottom:10px"></div><div class="sk pulse" style="height:14px;width:50%"></div></div></section>`;}
+function errorView(p){
+  return `<section class="hero">${fringe}<div class="meta"><span>${esc(p.id)}</span><span>${esc(p.file)}</span></div>
+  <div class="tag fail"><span class="ket">|∅⟩</span>Not read</div><h2>Couldn’t read ${esc(p.file)}</h2></section>
+  <div class="panel" style="max-width:640px"><p style="margin-top:0">${esc(p.why)}</p>
+  <div class="row"><label class="btn primary" for="file">Upload another file</label><button class="btn" data-act="${sec==='papers'?'remove_paper':'remove'}">Remove from list</button></div></div>`;}
+function blank(){
+  if(sec==='papers')return `<div class="blank">${bloch}<div><h2>Find what’s missing in the quantum literature</h2>
+    <p>Add papers and Overlap reads them, finds research gaps across them, and designs experiments to fill those gaps, each checked by simulation.</p>
+    <ul class="flow"><li><b>Papers</b>limitations, future work and experiments are extracted</li><li><b>Gaps</b>ranked by novelty, evidence and feasibility</li><li><b>Plans</b>a hypothesis, method and circuit, verified on a simulator</li></ul>
+    <div class="row"><label class="btn primary" for="file">Upload papers</label><button class="btn" data-act="sample_papers">Load 4 sample papers</button></div>
+    <p class="hint" style="margin-top:12px">Sample papers are synthetic, written to demonstrate the method.</p></div></div>`;
+  if(sec==='gaps')return `<div class="blank">${bloch}<div><h2>Find research gaps</h2>
+    <p>Gaps come from what analysed papers say they could not do, left open or leave for future work, and from method and platform pairs no paper in your corpus combines. Each gap can then be checked for novelty against OpenAlex, arXiv and Crossref.</p>
+    <div class="row"><button class="btn primary" data-act="corpus_gaps" ${meta.analysed?'':'disabled'}>Find gaps in the corpus</button>${D.papers.length?`<button class="btn" data-act="find_gaps">Find gaps in uploaded papers</button>`:''}</div>
+    <p class="hint" style="margin-top:12px">${meta.analysed?`${meta.analysed} analysed paper${meta.analysed===1?'':'s'} in the corpus.`:'No analysed papers yet: open Literature and analyse some first.'}</p></div></div>`;
+  if(sec==='plans')return `<div class="blank">${bloch}<div><h2>No experiment plans yet</h2><p>Open a gap and choose “Plan an experiment”. Each plan is simulated and audited straight away.</p>
+    <div class="row"><button class="btn primary" data-sec="gaps">Go to gaps</button></div></div></div>`;
+  return `<div class="blank">${bloch}<div><h2>No proposals waiting for review</h2><p>Upload a single experiment proposal to check its circuit and claims directly.</p>
+  <div class="row"><label class="btn primary" for="file">Upload proposal</label><button class="btn" id="sample">Try the sample Bell-state PDF</button><button class="btn" data-act="reload">Load benchmark cases</button></div></div></div>`;}
+function render(){
+  renderNav();renderRail();const p=cur();let html;
+  if(busy&&busy.sec===sec)html=loadingView(busy.title,busy.file,busy.steps||STEPS[sec],busy.step);
+  else if(sec==='literature')html=litMode==='corpus'?corpusView():(litMode==='collect'||!p)?collectPanel():litView(p);
+  else if(sec==='runs')html=(runMode==='new'||!p)?runStart():runView(p);
+  else if(sec==='reports')html=!p||p.kind==='overview'?overviewView(p||D.reports[0]||{stages:[],waiting:[],to_review:[],to_verify:[]}):reportView(p);
+  else if(!p)html=blank();
+  else if(p.state==='run'||running[p.id])html=loadingView(sec==='papers'?'Analysing the paper':'Verifying',p.file,STEPS[sec],(running[p.id]||p).step);
+  else if(p.state==='bad')html=errorView(p);
+  else html=sec==='papers'?paperView(p):sec==='gaps'?gapView(p):p.kind==='proposal'?proposalView(p):verdictView(p);
+  $('#main').innerHTML=html;}
+
+function toast(msg,undo){$('#tmsg').textContent=msg;$('#undo').hidden=!undo;last=undo;$('#toast').hidden=false;
+  clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').hidden=true,5000);}
+setInterval(()=>{let ch=false;const bump=o=>{if(o&&(o.step||0)<9){o.step=(o.step||0)+1;ch=true}};
+  [...pending.papers,...pending.proposals,...Object.values(running)].forEach(bump);bump(busy);if(ch)render();},900);
+function go(s,id){sec=s;if(id)sel[s]=id;if(s==='literature'&&id)litMode='detail';if(!list().some(x=>x.id===sel[s]))sel[s]=list()[0]?.id;compose=null;err='';render();$('#pane').scrollTop=0;}
+function download(text,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/markdown'}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast(`Downloaded ${name}`);}
+
+/* ---------- data in from Python ---------- */
+window.addEventListener('message',e=>{
+  const d=e.data;if(!d||d.type!=='streamlit:render')return;
+  const a=d.args||{};meta=a.meta||{};
+  if(d.theme&&d.theme.base)document.documentElement.dataset.theme=d.theme.base;
+  D={literature:a.literature||[],papers:a.papers||[],gaps:a.gaps||[],plans:a.plans||[],proposals:a.proposals||[],runs:a.runs||[],reports:a.reports||[]};
+  const done=new Set(meta.done||[]);
+  pending.papers=pending.papers.filter(p=>!done.has(p.token));pending.proposals=pending.proposals.filter(p=>!done.has(p.token));
+  for(const id in running){const it=D[running[id].sec].find(x=>x.id===id);if(!it||it.report_id!==running[id].was){delete running[id];if(it)toast('Verification re-run')}}
+  for(const id in localDec){const it=D.proposals.find(x=>x.id===id);if(!it||!!it.dec===localDec[id])delete localDec[id]}
+  if(meta.seq!==lastSeq){
+    const first=lastSeq===null;lastSeq=meta.seq;busy=null;
+    const f=a.focus||{};
+    if((!first||f.initial)&&f.seq===meta.seq&&f.sec){sec=f.sec;if(f.id)sel[f.sec]=f.id;if(f.sec==='plans')ptab=f.tab||'plan';if(f.sec==='runs')runMode=null;
+      if(f.sec==='literature')litMode=meta.lit_mode||(f.id?'detail':'collect');$('#pane').scrollTop=0;if(f.msg)toast(f.msg);}
+  }
+  for(const s of Object.keys(D)){const l=[...(pending[s]||[]),...D[s]];if(!l.some(x=>x.id===sel[s]))sel[s]=l[0]?.id;}
+  render();});
+
+/* ---------- events out to Python ---------- */
+function upload(files){
+  const token='u'+Date.now(),ok=['pdf','docx','txt'];
+  if(sec==='proposals'){const f=files[0];const ext=(f.name.split('.').pop()||'').toLowerCase();
+    pending.proposals.unshift({id:'New',title:f.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '),file:f.name,state:'run',step:0,token});sel.proposals='New';render();
+    if(!ok.includes(ext)){emit({kind:'upload',token,name:f.name,b64:''});return}
+    const r=new FileReader();r.onload=()=>emit({kind:'upload',token,name:f.name,b64:String(r.result).split(',')[1]||''});r.readAsDataURL(f);return}
+  files.forEach((f,i)=>pending.papers.unshift({id:`New ${i+1}`,title:f.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '),file:f.name,state:'run',step:0,token}));
+  sel.papers=pending.papers[0].id;render();
+  Promise.all(files.map(f=>new Promise(res=>{if(f.size>25e6||!ok.includes((f.name.split('.').pop()||'').toLowerCase()))return res({name:f.name,b64:'',size:f.size});
+    const r=new FileReader();r.onload=()=>res({name:f.name,b64:String(r.result).split(',')[1]||'',size:f.size});r.readAsDataURL(f);})))
+    .then(arr=>emit({kind:'upload_papers',token,files:arr}));}
+function act(kind){
+  const p=cur();
+  if(kind==='find_gaps'){busy={sec:'gaps',title:'Finding research gaps',step:0};sec='gaps';render();emit({kind});return}
+  if(kind==='corpus_gaps'){busy={sec:'gaps',title:'Finding gaps in the corpus',step:0,steps:STEPS.corpus_gaps};sec='gaps';render();emit({kind});return}
+  if(kind==='novelty_check'){busy={sec:'gaps',title:`Checking the novelty of ${p.id}`,file:p.title,step:0,steps:STEPS.novelty};render();emit({kind,id:p.id});return}
+  if(kind==='gap_weights'){const weights={};document.querySelectorAll('[data-w]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))weights[i.dataset.w]=v});emit({kind,weights,id:p&&p.id});return}
+  if(kind==='plan_gap'&&p.kind==='corpus'){busy={sec:'plans',title:`Drafting a proposal for ${p.id}`,file:p.title,step:0,steps:STEPS.proposal};sec='plans';render();emit({kind,gap_id:p.id});return}
+  if(kind==='plan_redraft'){busy={sec:'plans',title:`Drafting a new proposal for ${p.gap_id}`,file:p.gap_title,step:0,steps:STEPS.proposal};render();emit({kind,gap_id:p.gap_id});return}
+  if(kind==='report_build'){busy={sec:'reports',title:`Building the report for ${p.id}`,file:p.title,step:0,steps:STEPS.report};render();emit({kind,id:p.id});return}
+  if(kind==='run_new'){runMode='new';render();return}
+  if(kind==='run_list'){runMode=null;render();return}
+  if(kind==='run_resume_gap'){const v=(document.querySelector('input[name=rgap]:checked')||{}).value;if(!v){toast('Choose a gap first.');return}
+    busy={sec:'runs',title:`Investigating ${v}`,file:p.title,step:0,steps:STEPS.run_gap};render();emit({kind:'run_resume',id:p.id,value:v});return}
+  if(kind==='run_resume_plan'){busy={sec:'runs',title:'Continuing the run',file:p.title,step:0,steps:STEPS.run_plan};render();emit({kind:'run_resume',id:p.id,value:'continue'});return}
+  if(kind==='run_retry'){busy={sec:'runs',title:'Retrying the failed step',file:p.title,step:0,steps:STEPS.run_gap};render();emit({kind,id:p.id});return}
+  if(kind==='run_cancel'){emit({kind,id:p.id});return}
+  if(kind==='plan_verify'){busy={sec:'plans',title:`Verifying ${p.id}, revision ${p.revision}`,file:p.title,step:0,steps:STEPS.verify};ptab='verdict';render();emit({kind,id:p.id});return}
+  if(kind==='plan_edit_open'){editing=p.id;render();$('#pane').scrollTop=0;return}
+  if(kind==='plan_edit_cancel'){editing=null;render();return}
+  if(kind==='plan_gap'){busy={sec:'plans',title:`Planning an experiment for ${p.id}`,file:p.title,step:0};const gid=p.id;sec='plans';render();emit({kind,gap_id:gid});return}
+  if(kind==='sample_papers'){const token='s'+Date.now();['A','B','C','D'].forEach((x,i)=>pending.papers.push({id:`New ${i+1}`,title:`Sample paper ${x}`,file:'synthetic sample',state:'run',step:0,token}));
+    sec='papers';sel.papers=pending.papers[0].id;render();emit({kind,token});return}
+  if(kind==='remove_paper'||kind==='remove'){emit({kind,id:p.id});return}
+  if(kind==='lit_fulltext'){busy={sec:'literature',title:'Downloading the open-access PDF from arXiv',file:p.title,step:0};render();emit({kind,id:p.id});return}
+  if(kind==='lit_analyse'){busy={sec:'literature',title:'Analysing the paper',file:p.title,step:0,steps:STEPS.analysis};render();emit({kind,id:p.id});return}
+  if(kind==='lit_analyse_next'){busy={sec:'literature',title:'Analysing the next papers',file:'Up to 5 unanalysed papers',step:0,steps:STEPS.analysis};render();emit({kind,n:5});return}
+  if(kind==='corpus_run'){busy={sec:'literature',title:'Comparing the papers',file:'',step:0,steps:STEPS.corpus};render();emit({kind});return}
+  emit({kind});}
+function decide(p,val,note){localDec[p.id]=val;emit({kind:'decide',id:p.id,dec:val,note:note||''});render();}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button,a');if(!t)return;
+  const p=cur();
+  if(t.id==='dash'){e.preventDefault();t.textContent='Opening dashboard…';emit({kind:'nav',page:'dashboard'});return}
+  if(t.dataset.sec){go(t.dataset.sec);return}
+  if(t.dataset.dl&&p&&p.verification){download(p.verification.md,`${p.id}-rev${p.verification.revision}-verification.md`);return}
+  if(t.dataset.rdl&&p&&p.report){downloadReport(p,t.dataset.rdl);return}
+  if(t.dataset.decide){const p2=cur(),note=($('#decnote')?.value||'').trim();
+    if(t.dataset.decide!=='approved'&&note.length<10){toast('Add a short note (10+ characters) saying why.');$('#decnote')?.focus();return}
+    emit({kind:'plan_decide',id:p2.id,decision:t.dataset.decide,note});toast('Saving your decision…');return}
+  if(t.dataset.review){const p2=cur();if(p2)emit({kind:'gap_review',id:p2.id,status:t.dataset.review});return}
+  if(t.dataset.curate){const p2=cur();if(p2)emit({kind:'lit_curate',id:p2.id,status:t.dataset.curate});return}
+  if(t.dataset.litmode){litMode=t.dataset.litmode;render();$('#pane').scrollTop=0;return}
+  if(t.dataset.goto){const [s,id]=t.dataset.goto.split(':');go(s,id);return}
+  if(t.dataset.act){act(t.dataset.act);return}
+  if(t.dataset.id){sel[sec]=t.dataset.id;if(sec==='literature')litMode='detail';if(sec==='runs')runMode=null;compose=null;err='';render();$('#pane').scrollTop=0;return}
+  if(t.dataset.tab){if(sec==='plans')ptab=t.dataset.tab;else tab=t.dataset.tab;render();$(`#t-${t.dataset.tab}`)?.focus();return}
+  switch(t.id){
+    case 'sample':{const token='s'+Date.now();pending.proposals.unshift({id:'New',title:'sample bell state proposal',file:'sample_bell_state_proposal.pdf',state:'run',step:0,token});sel.proposals='New';render();emit({kind:'sample',token});break}
+    case 'go':
+      if(p.v==='pass'){decide(p,true);toast('Sent to panel',()=>decide(p,false))}
+      else{compose=p.id;err='';render();$('#msg').focus()}break;
+    case 'cancel':compose=null;err='';render();break;
+    case 'reopen':decide(p,false);break;
+    case 'rerun':running[p.id]={id:p.id,file:p.file,step:0,was:p.report_id,sec};emit({kind:sec==='plans'?'reverify':'rerun',id:p.id});render();break;
+    case 'copy':Promise.resolve().then(()=>navigator.clipboard.writeText(p.json)).then(()=>toast('Report JSON copied'),()=>toast('Couldn’t copy: the browser blocked clipboard access'));break;
+    case 'dlmd':download(p.md,`${p.report_id}.md`);break;
+    case 'agenda':case 'agenda2':download(meta.agenda||'# Research agenda\n\nNo content yet.','research_agenda.md');break;
+    case 'undo':$('#toast').hidden=true;last&&last();break;}
+});
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,textarea,select')||e.metaKey||e.ctrlKey)return;
+  if(e.target.dataset&&e.target.dataset.tab&&(e.key==='ArrowRight'||e.key==='ArrowLeft')){
+    const defs=sec==='plans'?PTABS:TABS,curT=sec==='plans'?ptab:tab,i=defs.findIndex(x=>x[0]===curT),n=(i+(e.key==='ArrowRight'?1:-1)+defs.length)%defs.length;
+    if(sec==='plans')ptab=defs[n][0];else tab=defs[n][0];render();$(`#t-${defs[n][0]}`)?.focus();e.preventDefault();return}
+  const l=list(),k=e.key.toLowerCase();if(!l.length||(k!=='j'&&k!=='k'))return;
+  const i=l.findIndex(x=>x.id===sel[sec]),n=Math.min(l.length-1,Math.max(0,i+(k==='j'?1:-1)));
+  if(n!==i){sel[sec]=l[n].id;render();$('#pane').scrollTop=0;document.querySelector(`[data-id="${CSS.escape(l[n].id)}"]`)?.focus()}});
+/* Literature form and filters: values live in state so re-renders never wipe what was typed. */
+const LIT_FIELDS={'lit-topic':'topic','lit-query':'query','lit-y1':'year_from','lit-y2':'year_to','lit-limit':'limit','lit-doi':'doi'};
+const FILTER_FIELDS={'lf-text':'text','lf-avail':'availability','lf-src':'source','lf-y1':'year_from','lf-y2':'year_to'};
+document.addEventListener('input',e=>{
+  const id=e.target.id;
+  if(FILTER_FIELDS[id]){litFilter[FILTER_FIELDS[id]]=e.target.value;renderList();return}
+  if(LIT_FIELDS[id]){litForm[LIT_FIELDS[id]]=e.target.value;if(id==='lit-topic'){const q=$('#lit-query'),t=(meta.topics||[]).find(x=>x.key===e.target.value);if(q)q.placeholder=t?t.query:'e.g. GHZ state fidelity superconducting'}return}
+  if(e.target.name==='src'){litForm.sources=[...document.querySelectorAll('input[name=src]:checked')].map(x=>x.value);return}
+});
+function litSubmit(form){
+  const showErr=(id,msg)=>{const el=$(id);el.textContent=msg;el.hidden=!msg;};
+  if(form.id==='doiform'){
+    const doi=litForm.doi.trim();
+    if(!/^(https?:\/\/(dx\.)?doi\.org\/|doi:)?10\.\d{4,9}\/\S+$/i.test(doi)){showErr('#doi-err','That doesn’t look like a DOI. It starts with 10. followed by a slash, e.g. 10.1038/s41586-023-06505-7.');$('#lit-doi').focus();return}
+    busy={sec:'literature',title:'Looking up the DOI in OpenAlex and Crossref',file:doi,step:0};render();emit({kind:'lit_doi',doi});return}
+  const f=litForm,yr=v=>v===''||/^(19|20)\d{2}$/.test(v.trim());
+  if(!f.query.trim()&&!f.topic){showErr('#lit-err','Enter a query or choose a research area.');$('#lit-query').focus();return}
+  if(!yr(f.year_from)||!yr(f.year_to)){showErr('#lit-err','Years must be four digits, e.g. 2019.');return}
+  if(f.year_from&&f.year_to&&+f.year_from>+f.year_to){showErr('#lit-err','“From year” is after “To year”.');return}
+  if(!f.sources.length){showErr('#lit-err','Choose at least one source.');return}
+  const topic=(meta.topics||[]).find(t=>t.key===f.topic);
+  busy={sec:'literature',title:'Collecting papers',file:`“${f.query.trim()||(topic?topic.query:'')}” from ${f.sources.map(s=>SRC_LABEL[s]).join(', ')}`,step:0};render();
+  emit({kind:'lit_collect',query:f.query.trim(),topic:f.topic,year_from:f.year_from.trim(),year_to:f.year_to.trim(),limit:f.limit,sources:f.sources});}
+document.addEventListener('input',e=>{if(e.target.id==='msg'){drafts[sel[sec]]=e.target.value;
+  if(err&&e.target.value.trim().length>=20){err='';const h=$('#msgh');h.className='hint';h.textContent='The check log goes with your note.';e.target.removeAttribute('aria-invalid')}}});
+document.addEventListener('submit',e=>{e.preventDefault();
+  if(e.target.id==='runform'){const f=runForm;f.query=$('#run-query').value.trim();f.topic=$('#run-topic').value;f.collect=$('#run-collect').checked;
+    f.limit=$('#run-limit').value.trim();f.analyse_n=$('#run-analyse').value.trim();
+    const bad=[f.limit,f.analyse_n].some(v=>v!==''&&!/^\d+$/.test(v));
+    if(bad){const el=$('#run-err');el.textContent='Use whole numbers for the counts.';el.hidden=false;return}
+    if(f.collect&&!f.query&&!f.topic){const el=$('#run-err');el.textContent='To collect papers, enter what to research or choose an area.';el.hidden=false;return}
+    runMode=null;busy={sec:'runs',title:'Starting the run',file:f.query||((meta.topics||[]).find(t=>t.key===f.topic)||{}).label||'existing corpus',step:0,steps:STEPS.run_start};render();
+    emit({kind:'run_start',query:f.query,topic:f.topic,collect:f.collect,limit:f.limit,analyse_n:f.analyse_n,sources:f.sources});return}
+  if(e.target.id==='peform'){const p=cur();let changes;
+    try{changes=collectEdit(p)}catch(err2){const el=$('#pe-err');el.textContent=err2.message;el.hidden=false;return}
+    emit({kind:'plan_edit',id:p.id,changes,note:$('#penote').value});editing=null;toast('Saving…');return}
+  if(e.target.id==='litform'||e.target.id==='doiform'){litSubmit(e.target);return}
+  const p=cur(),v=(drafts[p.id]||'').trim();
+  if(v.length<20){err=v?`Add ${20-v.length} more characters so the author knows what to change.`:'Add a note so the author knows what to change.';render();$('#msg').focus();return}
+  compose=null;err='';decide(p,true,v);toast(DEC[p.v][1],()=>decide(p,false));});
+$('#file').addEventListener('change',e=>{const fs=[...e.target.files];if(fs.length)upload(fs);e.target.value='';});
+
+render();
+send('streamlit:componentReady',{apiVersion:1});
+send('streamlit:setFrameHeight',{height:window.innerHeight||900});
+}
+</script>
+</body>
+</html>
